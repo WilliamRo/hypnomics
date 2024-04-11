@@ -64,9 +64,9 @@ def extract_hypnocloud_from_signal_group(
     chn_index = channels_names.index(chn)
     for stag_key in STAGE_KEYS:
       prob_dict = {}
-      for k, f in pl.extractors.items():
-        prob_dict[k] = [f(s[:, chn_index], fs, **probe_configs.get(k, {}))
-                        for s in segments[stag_key]]
+      for k, f in pl.extractors.items(): prob_dict[k] = np.array(
+        [f(s[:, chn_index], fs, **probe_configs.get(k, {}))
+         for s in segments[stag_key]])
       chn_stag_prob_dict[chn][stag_key] = prob_dict
 
   return chn_stag_prob_dict
@@ -85,7 +85,7 @@ def extract_hypnoprints_from_hypnocloud(
   ck0, pk0 = ordered_chn_key[0], ordered_prob_key[0]
   assert len(ordered_prob_key) == 2  # TODO
 
-  N = sum([len(hypnocloud[ck0][sk][pk0]) for sk in STAGE_KEYS])
+  N = sum([len(hypnocloud[ck0][sk][pk0]) for sk in STAGE_KEYS if sk != 'W'])
 
   features = []
   for ck in ordered_chn_key:

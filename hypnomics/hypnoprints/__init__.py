@@ -13,3 +13,4 @@
 # limitations under the License.
 # ======-=========================================================-=============
 from .hp_extractor import extract_hypnocloud_from_signal_group
+from .hp_extractor import extract_hypnoprints_from_hypnocloud
