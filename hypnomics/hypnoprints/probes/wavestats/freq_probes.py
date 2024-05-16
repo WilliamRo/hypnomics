@@ -40,6 +40,6 @@ def estimate_freq_stft_v1(s: np.ndarray, fs: float, fmin=0.5, fmax=20) -> float:
   f, spectrum = f[l_mask], spectrum[l_mask]
 
   # Calculate mean frequency
-  dom_f = np.sum(f[..., np.newaxis] * spectrum, axis=0) / np.sum(
-    spectrum, axis=0)
+  dom_f = np.sum(f[..., np.newaxis] * spectrum, axis=0) / (np.sum(
+    spectrum, axis=0) + 1e-6)
   return np.average(dom_f)

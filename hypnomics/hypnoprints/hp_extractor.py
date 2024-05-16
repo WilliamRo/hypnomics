@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ====-========================================================================-
+from collections import OrderedDict
 from hypnomics.hypnoprints.probes import pl
 from pictor.objects.signals.digital_signal import DigitalSignal
 from pictor.objects.signals.signal_group import Annotation
@@ -73,38 +74,65 @@ def extract_hypnocloud_from_signal_group(
 
 
 def extract_hypnoprints_from_hypnocloud(
-    hypnocloud: dict, config='default') -> np.ndarray:
+    hypnocloud: dict, config='default', return_dict=False) -> np.ndarray:
   """Extract hypnoprints from hypnocloud based on config.
   """
   if config != 'default': raise NotImplementedError(
     "!! Only default config is supported for now !!")
 
   weights = {'W': 0.2, 'N1': 0.5, 'N3': 1, 'R': 1}
-  ordered_chn_key = sorted(hypnocloud.keys())
-  ordered_prob_key = sorted(hypnocloud[ordered_chn_key[0]]['W'].keys())
+
+  x_dict = OrderedDict()
+
+  # (1) Proportion
+  x_dict.update(hypno_proportion(hypnocloud))
+
+  # (2) Shape
+  x_dict.update(hypno_shape_1(hypnocloud))
+
+  if return_dict: return x_dict
+  return np.array(list(x_dict.values()))
+
+# region: Feature Extractors
+
+def hypno_proportion(cloud: dict):
+  x_dict = OrderedDict()
+
+  ordered_chn_key = sorted(cloud.keys())
+  ordered_prob_key = sorted(cloud[ordered_chn_key[0]]['W'].keys())
   ck0, pk0 = ordered_chn_key[0], ordered_prob_key[0]
-  assert len(ordered_prob_key) == 2  # TODO
 
-  N = sum([len(hypnocloud[ck0][sk][pk0]) for sk in STAGE_KEYS if sk != 'W'])
+  N = sum([len(cloud[ck0][sk][pk0]) for sk in STAGE_KEYS if sk != 'W'])
+  for sk in STAGE_KEYS:
+    x_dict[f'<{sk}>/M'] = len(cloud[ck0][sk][pk0]) / N
 
-  features = []
+  return x_dict
+
+
+def hypno_shape_1(cloud: dict):
+  x_dict = OrderedDict()
+
+  ordered_chn_key = sorted(cloud.keys())
+  ordered_prob_key = sorted(cloud[ordered_chn_key[0]]['W'].keys())
+  ck0, pk0 = ordered_chn_key[0], ordered_prob_key[0]
+
   for ck in ordered_chn_key:
     # Merge data
-    data = {sk: np.vstack([hypnocloud[ck][sk][pk] for pk in ordered_prob_key])
-            for sk in STAGE_KEYS if len(hypnocloud[ck][sk][pk0]) > 0}
+    data = {sk: np.vstack([cloud[ck][sk][pk] for pk in ordered_prob_key])
+            for sk in STAGE_KEYS if len(cloud[ck][sk][pk0]) > 0}
     N2_mu = np.mean(data['N2'], axis=1)
-    features.append(data['N2'].shape[1] / N)
 
-    for s, w in weights.items():
-      if s not in data:
-        features.extend([0.] * 3)
-        continue
-      mu = np.mean(data[s], axis=1)
-      diff = (mu - N2_mu) * w
-      features.append(data[s].shape[1] / N * w)
-      features.extend(diff)
+    for sk in STAGE_KEYS:
+      if sk == 'N2': continue
+      mu = np.mean(data[sk], axis=1)
+      coord = (mu - N2_mu)
+      for pk, x in zip(ordered_prob_key, coord):
+        xk = f'<{ck.split(" ")[-1]}|{sk}|{pk[0]}>coord'
+        x_dict[xk] = x
 
-  return np.array(features)
+  return x_dict
+
+# endregion: Feature Extractors
 
 
 # region: Utilities
