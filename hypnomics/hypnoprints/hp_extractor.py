@@ -124,8 +124,13 @@ def hypno_shape_1(cloud: dict):
 
     for sk in STAGE_KEYS:
       if sk == 'N2': continue
-      mu = np.mean(data[sk], axis=1)
-      coord = (mu - N2_mu)
+
+      if sk not in data:
+        coord = (0, 0)
+      else:
+        mu = np.mean(data[sk], axis=1)
+        coord = (mu - N2_mu)
+
       for pk, x in zip(ordered_prob_key, coord):
         xk = f'<{ck.split(" ")[-1]}|{sk}|{pk[0]}>coord'
         x_dict[xk] = x
