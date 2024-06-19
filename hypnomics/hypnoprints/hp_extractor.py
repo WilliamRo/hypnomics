@@ -27,7 +27,8 @@ STAGE_KEYS = ('W', 'N1', 'N2', 'N3', 'R')
 
 def extract_hypnocloud_from_signal_group(
     sg: SignalGroup, channels, time_resolution=30,
-    stage_key='stage Ground-Truth', probe_configs={}) -> dict:
+    stage_key='stage Ground-Truth', extractor_dict=None,
+    probe_configs={}) -> dict:
   """Extract hypno-cloud from signal group using given probes.
   Support R&K, AASM stage annotations. If R&K annotations are provided,
   N3 and N4 stages will be merged into N3.
@@ -37,6 +38,9 @@ def extract_hypnocloud_from_signal_group(
     channels: str or list of str
     time_resolution: int, time resolution in seconds, should be a factor of 30
     stage_key: str, key of the stage annotation
+    extractor_dict: dict, e.g., {'key': function, ...},
+      signature of function: f(s: ndarray, **kwargs) -> float
+    probe_configs: dict of dicts, e.g., {'amplitude': {'window_size': 1.0}}
 
   Returns: dict, hypnocloud[channel_key][probe_key][stage_key] = [v1, ..., vN]
   """
@@ -53,6 +57,8 @@ def extract_hypnocloud_from_signal_group(
   # I-iii Check time resolution
   if 30 % time_resolution != 0:
     raise NotImplementedError("!! Time resolution should be a factor of 30 !!")
+  # I-iv Check extractor
+  if extractor_dict is None: extractor_dict = pl.extractors
 
   # II Extract stage clusters
   channels_names, fs = ds.channels_names, ds.sfreq
@@ -65,7 +71,7 @@ def extract_hypnocloud_from_signal_group(
     chn_index = channels_names.index(chn)
     for stag_key in STAGE_KEYS:
       prob_dict = {}
-      for k, f in pl.extractors.items(): prob_dict[k] = np.array(
+      for k, f in extractor_dict.items(): prob_dict[k] = np.array(
         [f(s[:, chn_index], fs, **probe_configs.get(k, {}))
          for s in segments[stag_key]])
       chn_stag_prob_dict[chn][stag_key] = prob_dict
