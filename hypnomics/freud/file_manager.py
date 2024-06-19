@@ -74,6 +74,9 @@ class FileManager(Nomear):
           b_exist = self._check_path(feature_path, create=False,
                                      return_false_if_not_exist=True)
           return feature_path, b_exist
+        else: return tr_path
+      else: return channel_path
+    else: return sg_path
 
   def _get_signal_group_generator(self, sg_path: str, pattern: str,
                                   progress_bar=False):
