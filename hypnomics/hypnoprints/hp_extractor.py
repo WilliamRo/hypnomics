@@ -23,11 +23,12 @@ import numpy as np
 
 
 STAGE_KEYS = ('W', 'N1', 'N2', 'N3', 'R')
+DEFAULT_STAGE_KEY = 'stage Ground-Truth'
 
 
 def extract_hypnocloud_from_signal_group(
     sg: SignalGroup, channels, time_resolution=30,
-    stage_key='stage Ground-Truth', extractor_dict=None,
+    stage_key=DEFAULT_STAGE_KEY, extractor_dict=None,
     probe_configs={}) -> dict:
   """Extract hypno-cloud from signal group using given probes.
   Support R&K, AASM stage annotations. If R&K annotations are provided,
