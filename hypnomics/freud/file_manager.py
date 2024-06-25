@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ====-======================================================================-==
+from hypnomics.freud.nebula import Nebula
 from pictor.objects.signals.signal_group import SignalGroup
 from roma import console
 from roma import finder
@@ -90,6 +91,26 @@ class FileManager(Nomear):
   # endregion: Private Methods
 
   # region: Public Methods
+
+  def load_nebula(self, sg_labels: list, channels: list, time_resolution: int,
+                  probe_keys: list, name='Nebula') -> Nebula:
+    nebula = Nebula(time_resolution, name=name)
+
+    for sg_label in sg_labels:
+      nebula.labels.append(sg_label)
+      for channel in channels:
+        nebula.channels.append(channel)
+        for probe_key in probe_keys:
+          nebula.probe_keys.append(probe_key)
+          clouds_path, b_exist = self._check_hierarchy(
+            sg_label, channel=channel, time_resolution=time_resolution,
+            feature_name=probe_key, create_if_not_exist=False)
+
+          assert b_exist, f'`{clouds_path}` not found.'
+          clouds = io.load_file(clouds_path)
+          nebula.data_dict[(sg_label, channel, probe_key)] = clouds
+
+    return nebula
 
   def get_sampling_frequency(self, sg_path: str, pattern: str, channels: list):
     """Get sampling frequency from the first signal group file in the
