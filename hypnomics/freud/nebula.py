@@ -95,7 +95,7 @@ class Nebula(Nomear):
       fpv.show()
     else:
       # Use specified viewer
-      viewer = viewer_class(nebular=self, x_key=x_key, y_key=y_key,
+      viewer = viewer_class(nebula=self, x_key=x_key, y_key=y_key,
                             title=title, figure_size=fig_size)
       for k, v in configs.items(): viewer.plotters[0].set(k, v)
       viewer.show()
@@ -106,9 +106,11 @@ class Nebula(Nomear):
 
   @staticmethod
   def load(path: str, verbose=True) -> 'Nebula':
+    assert path.endswith('.nebula'), "!! Nebula file should end with '.nebula' !!"
     return io.load_file(path, verbose=verbose)
 
   def save(self, path: str, verbose=True):
+    if not path.endswith('.nebula'): path = f'{path}.nebula'
     io.save_file(self, path, verbose=verbose)
 
   # endregion: IO

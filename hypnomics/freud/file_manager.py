@@ -98,10 +98,15 @@ class FileManager(Nomear):
 
     for sg_label in sg_labels:
       nebula.labels.append(sg_label)
+
       for channel in channels:
-        nebula.channels.append(channel)
+        if channel not in nebula.channels:
+          nebula.channels.append(channel)
+
         for probe_key in probe_keys:
-          nebula.probe_keys.append(probe_key)
+          if probe_key not in nebula.probe_keys:
+            nebula.probe_keys.append(probe_key)
+
           clouds_path, b_exist = self._check_hierarchy(
             sg_label, channel=channel, time_resolution=time_resolution,
             feature_name=probe_key, create_if_not_exist=False)

@@ -24,17 +24,20 @@ class Telescope(Pictor):
   class Keys(Pictor.Keys):
     CHANNELS = 'ChAnNeLs'
 
-  def __init__(self, nebular: Nebula, x_key: str, y_key: str,
+  def __init__(self, nebula: Nebula, x_key: str, y_key: str,
                title='Telescope', figure_size=(10, 6), **kwargs):
     # Call parent's constructor
     super(Telescope, self).__init__(title, figure_size=figure_size)
-    self.nebular = nebular
+    self.nebula = nebula
     self.x_key = x_key
     self.y_key = y_key
     self._initialize_scope()
 
     # Add plotter
     self.add_plotter(Hans(self))
+
+    # Set kwargs
+    self.kwargs = kwargs
 
   # region: Properties
 
@@ -53,7 +56,7 @@ class Telescope(Pictor):
 
     pair_dict = {}
     for key in (self.x_key, self.y_key):
-      pair_dict[key] = self.nebular.data_dict[(sg_label, channel_label, key)]
+      pair_dict[key] = self.nebula.data_dict[(sg_label, channel_label, key)]
     return pair_dict
 
   # endregion: Properties
@@ -62,8 +65,8 @@ class Telescope(Pictor):
 
   def _initialize_scope(self):
     # Set axis
-    self.objects = self.nebular.labels
-    self.set_to_axis(self.Keys.CHANNELS, self.nebular.channels)
+    self.objects = self.nebula.labels
+    self.set_to_axis(self.Keys.CHANNELS, self.nebula.channels)
 
     # Initialize shortcuts
     self.shortcuts._library.pop('Escape')
@@ -76,3 +79,15 @@ class Telescope(Pictor):
       description=des, color='yellow')
 
   # endregion: Private Methods
+
+  # region: Public Methods
+
+  def save(self):
+    """Save nebula to file"""
+    import tkinter as tk
+
+    file_path = tk.filedialog.asksaveasfilename(
+      title='Save as', filetypes=[('NEBULA files', '*.nebula')])
+    if file_path is not None: self.nebula.save(file_path)
+
+  # endregion: Public Methods
