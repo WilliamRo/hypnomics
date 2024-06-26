@@ -13,12 +13,21 @@
 # limitations under the License.
 # ==-========================================================================-==
 from collections import OrderedDict
+from hypnomics.hypnoprints.hp_extractor import STAGE_KEYS
 from roma import Nomear
 from roma import io
 
 
 
+# STAGE_KEYS = ('W', 'N1', 'N2', 'N3', 'R')
+
 class Nebula(Nomear):
+  """Nebula.data_dict =
+  {
+    (clouds_label, channel, probe_key):
+    {'W': [...], 'N1': [...], 'N2': [...], 'N3': [...], 'R': [...]}
+  }
+  """
 
   def __init__(self, time_resolution: int, name: str = 'Nebula'):
     assert 30 % time_resolution == 0, "!! Time resolution should be a factor of 30 !!"
@@ -42,6 +51,16 @@ class Nebula(Nomear):
   @Nomear.property(local=True)
   def data_dict(self): return OrderedDict()
 
+  @Nomear.property()
+  def epoch_num_dict(self) -> dict:
+    od = OrderedDict()
+    ck, pk = self.channels[0], self.probe_keys[0]
+    for label in self.labels:
+      od[label] = OrderedDict()
+      for sk in STAGE_KEYS:
+        od[label][sk] = len(self.data_dict[(label, ck, pk)][sk])
+    return od
+
   # endregion: Properties
 
   # region: Public Methods
@@ -60,6 +79,27 @@ class Nebula(Nomear):
 
     return fps
 
+  def dual_view(self, x_key='FREQ-20', y_key='AMP-1', viewer_class=None,
+                title=None, fig_size=(10, 6), **configs):
+    """Visualize nebula in a 2-D space"""
+    # Set default arguments
+    if title is None: title = f'Delta={self.delta}'
+
+    # Use default viewer (to be deprecated) if not specified
+    if viewer_class is None:
+      from sc.fp_viewer import FPViewer
+
+      fps = self.to_walker_results(x_key=x_key, y_key=y_key)
+      fpv = FPViewer(walker_results=fps, title=title, figure_size=fig_size)
+      for k, v in configs.items(): fpv.plotters[0].set(k, v)
+      fpv.show()
+    else:
+      # Use specified viewer
+      viewer = viewer_class(nebular=self, x_key=x_key, y_key=y_key,
+                            title=title, figure_size=fig_size)
+      for k, v in configs.items(): viewer.plotters[0].set(k, v)
+      viewer.show()
+
   # endregion: Public Methods
 
   # region: IO
@@ -72,4 +112,12 @@ class Nebula(Nomear):
     io.save_file(self, path, verbose=verbose)
 
   # endregion: IO
+
+  # region: Clouds Analysis
+
+  def get_epoch_total(self, label, stage_keys=STAGE_KEYS, excludes=()) -> int:
+    return sum([self.epoch_num_dict[label][sk]
+                for sk in stage_keys if sk not in excludes])
+
+  # endregion: Clouds Analysis
 
