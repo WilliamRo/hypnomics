@@ -123,3 +123,22 @@ class Nebula(Nomear):
 
   # endregion: Clouds Analysis
 
+  # region: Overridden Methods
+
+  def __getitem__(self, item):
+    if isinstance(item, (list, tuple)):
+      neb = Nebula(self.time_resolution, name=f'{self.name}')
+      for chn in self.channels: neb.channels.append(chn)
+      for pk in self.probe_keys: neb.probe_keys.append(pk)
+
+      for label in item:
+        assert label in self.labels, f"!! Label `{label}` not found !!"
+        neb.labels.append(label)
+        for chn in self.channels:
+          for pk in self.probe_keys:
+            neb.data_dict[(label, chn, pk)] = self.data_dict[(label, chn, pk)]
+
+      return neb
+
+  # endregion: Overridden Methods
+
