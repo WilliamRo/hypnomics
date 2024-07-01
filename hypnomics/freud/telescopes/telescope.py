@@ -15,6 +15,7 @@
 from pictor import Pictor
 from hypnomics.freud.nebula import Nebula
 
+from .galileo import Galileo
 from .hans import Hans
 
 
@@ -35,6 +36,7 @@ class Telescope(Pictor):
 
     # Add plotter
     self.add_plotter(Hans(self))
+    self.add_plotter(Galileo(self))
 
     # Set kwargs
     self.kwargs = kwargs

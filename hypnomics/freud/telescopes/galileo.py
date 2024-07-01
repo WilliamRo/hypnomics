@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# ====-========================================================================-
+# ===-===================================================================-======
 from hypnomics.freud.nebula import Nebula
 from pictor.plotters.plotter_base import Plotter
 from pictor.xomics.misc.distribution import remove_outliers_for_list
@@ -22,7 +22,7 @@ import numpy as np
 
 
 
-class Hans(Plotter):
+class Galileo(Plotter):
 
   STAGE_COLORS = {
     # see https://matplotlib.org/stable/gallery/color/named_colors.html
@@ -34,17 +34,15 @@ class Hans(Plotter):
     # Call parent's constructor
     super().__init__(self.plot, pictor)
 
-    self.new_settable_attr('show_scatter', True, bool,
+    self.new_settable_attr('show_scatter', False, bool,
                            'Option to show scatter for each stage')
-    self.new_settable_attr('show_kde', True, bool,
+    self.new_settable_attr('show_kde', False, bool,
                            'Option to show KDE for each stage')
-    self.new_settable_attr('show_vector', False, bool,
+    self.new_settable_attr('show_vector', True, bool,
                            'Option to vector KDE for each stage')
 
-    self.new_settable_attr('xmin', None, float, 'x-min')
-    self.new_settable_attr('xmax', None, float, 'x-max')
-    self.new_settable_attr('ymin', None, float, 'y-min')
-    self.new_settable_attr('ymax', None, float, 'y-max')
+    self.new_settable_attr('xmax', 3.0, float, 'x-max')
+    self.new_settable_attr('ymax', 160e-6, float, 'y-max')
     self.new_settable_attr('scatter_alpha', 0.5, float, 'scatter_alpha')
 
     self.new_settable_attr('margin', 0.2, float, 'margin')
@@ -52,7 +50,7 @@ class Hans(Plotter):
     self.new_settable_attr(
       'iw', False, bool, 'Option to ignore wake for axis limits')
     self.new_settable_attr(
-      'io', True, bool, 'Option to ignore ourliers for axis limits')
+      'io', False, bool, 'Option to ignore ourliers for axis limits')
 
   # region: Properties
 
@@ -86,9 +84,19 @@ class Hans(Plotter):
     # (1) Plot scatter/KDE/vector of each stage
     x_key, y_key = list(res_dict.keys())
     X_all, Y_all = None, None
+
+    # PATCH
+    x0 = self.nebula.get_center(
+      self.selected_clouds, self.nebula.channels[0], self.x_key, 'N2')
+    y0 = self.nebula.get_center(
+      self.selected_clouds, self.nebula.channels[0], self.y_key, 'N2')
+
     for stage_key, color in self.STAGE_COLORS.items():
       if stage_key not in res_dict[x_key]: continue
+
+      # PATCH
       Xs, Ys = res_dict[x_key][stage_key], res_dict[y_key][stage_key]
+      Xs, Ys = Xs - x0, Ys - y0
 
       if len(Xs) < 2: continue
 
@@ -101,7 +109,7 @@ class Hans(Plotter):
 
       # (1.2) Plot KDE if required
       if self.get('show_kde'):
-        self.show_kde(ax, Xs, Ys, color, label, stage_key)
+        self.show_kde(ax, Xs, Ys, color, label, stage_key, x0, y0)
         label = None
 
       # (1.3) Plot vector if required
@@ -133,24 +141,18 @@ class Hans(Plotter):
     # Remove outliers if required
     if self.get('io'): X_all, Y_all = remove_outliers_for_list(X_all, Y_all)
 
-    xmin, xmax = np.min(X_all), np.max(X_all)
-    ymin, ymax = np.min(Y_all), np.max(Y_all)
+    xmax, ymax = np.max(np.abs(X_all)), np.max(np.abs(Y_all))
 
-    m = self.get('margin')
-    xm, ym = (xmax - xmin) * m, (ymax - ymin) * m
-    xmin, xmax = xmin - xm, xmax + xm
-    ymin, ymax = ymin - ym, ymax + ym
-
-    xmin = self.get('xmin') if self.get('xmin') is not None else xmin
     xmax = self.get('xmax') if self.get('xmax') is not None else xmax
-    ymin = self.get('ymin') if self.get('ymin') is not None else ymin
     ymax = self.get('ymax') if self.get('ymax') is not None else ymax
 
-    ax.set_xlim(xmin, xmax)
-    ax.set_ylim(ymin, ymax)
+    ax.set_xlim(-xmax, xmax)
+    ax.set_ylim(-ymax, ymax)
 
   def show_vector(self, ax: plt.Axes, m1, m2, color, label):
+    m1, m2 = remove_outliers_for_list(m1, m2, alpha=1.5)
     mu1, mu2 = np.mean(m1), np.mean(m2)
+
     # (1) Calculate covariance matrix
     cov = np.cov(m1, m2)
     assert cov[0, 1] == cov[1, 0]
@@ -163,18 +165,18 @@ class Hans(Plotter):
     if label == 'W':
       ax.plot(x1, y1, 's', color=color)
     else:
-      propotion = len(m1) / self.nebula.get_epoch_total(
+      proportion = len(m1) / self.nebula.get_epoch_total(
         self.selected_clouds, excludes='W')
       alpha = 0.5
       total_size = 500
       ax.scatter([x1], [y1], s=total_size, c='none', marker='o',
                  edgecolors='grey', alpha=alpha)
-      ax.scatter([x1], [y1], s=propotion * total_size, color=color, alpha=1.0)
+      ax.scatter([x1], [y1], s=proportion * total_size, color=color, alpha=1.0)
 
     # (3) Plot covariance direction
     ax.plot([x1, x2], [y1, y2], '-', color=color, label=label)
 
-  def show_kde(self, ax: plt.Axes, m1, m2, color, label, stage_key):
+  def show_kde(self, ax: plt.Axes, m1, m2, color, label, stage_key, x0, y0):
     if len(m1) == 0: return
 
     # (1) Calculate KDE
@@ -188,6 +190,7 @@ class Hans(Plotter):
       X, Y, Z = self.nebula.get_from_pocket(kde_key)
 
     # (2) Plot contour
+    X, Y = X - x0, Y - y0
     ax.contour(X, Y, Z, colors=color)
 
     # (-1) Prepare label if necessary

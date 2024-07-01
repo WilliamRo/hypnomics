@@ -13,7 +13,11 @@
 # limitations under the License.
 # ==-========================================================================-==
 from collections import OrderedDict
+
+import numpy as np
+
 from hypnomics.hypnoprints.hp_extractor import STAGE_KEYS
+from pictor.xomics.misc.distribution import remove_outliers
 from roma import Nomear
 from roma import io
 
@@ -28,6 +32,8 @@ class Nebula(Nomear):
     {'W': [...], 'N1': [...], 'N2': [...], 'N3': [...], 'R': [...]}
   }
   """
+
+  STAGE_KEYS = STAGE_KEYS
 
   def __init__(self, time_resolution: int, name: str = 'Nebula'):
     assert 30 % time_resolution == 0, "!! Time resolution should be a factor of 30 !!"
@@ -51,7 +57,7 @@ class Nebula(Nomear):
   @Nomear.property(local=True)
   def data_dict(self): return OrderedDict()
 
-  @Nomear.property()
+  @property
   def epoch_num_dict(self) -> dict:
     od = OrderedDict()
     ck, pk = self.channels[0], self.probe_keys[0]
@@ -100,6 +106,12 @@ class Nebula(Nomear):
       for k, v in configs.items(): viewer.plotters[0].set(k, v)
       viewer.show()
 
+  def set_labels(self, labels: list, check_sub_set=True):
+    if check_sub_set:
+      for lb in labels:
+        assert lb in self.labels, f"!! Label `{lb}` not found !!"
+    self.put_into_pocket('labels', labels, local=True, exclusive=False)
+
   # endregion: Public Methods
 
   # region: IO
@@ -141,4 +153,17 @@ class Nebula(Nomear):
       return neb
 
   # endregion: Overridden Methods
+
+  # region: Lab Methods
+
+  # region: Reference
+
+  def get_center(self, label, chn, pk, stage_key):
+    cloud = self.data_dict[(label, chn, pk)][stage_key]
+    cloud = remove_outliers(cloud)
+    return np.mean(cloud)
+
+  # endregion: Reference
+
+  # endregion: Lab Methods
 
