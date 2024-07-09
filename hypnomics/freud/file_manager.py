@@ -80,8 +80,12 @@ class FileManager(Nomear):
     else: return sg_path
 
   def _get_signal_group_generator(self, sg_path: str, pattern: str,
-                                  progress_bar=False):
+                                  progress_bar=False, **kwargs):
     sg_file_list = finder.walk(sg_path, pattern=pattern)
+
+    N = kwargs.get('max_n_sg', None)
+    if N is not None: sg_file_list = sg_file_list[:N]
+
     for i, file_path in enumerate(sg_file_list):
       if progress_bar: console.print_progress(i, len(sg_file_list))
       sg: SignalGroup = io.load_file(file_path, verbose=True)

@@ -39,10 +39,10 @@ class Freud(FileManager):
 
   def generate_clouds(self, sg_path: str, pattern: str, channels: list,
                       time_resolutions: list, extractor_dict: dict=None,
-                      overwrite=False):
+                      overwrite=False, **kwargs):
     """Generate clouds from signal group and save in a hierarchy structure."""
     sg_generator = self._get_signal_group_generator(
-      sg_path, pattern=pattern, progress_bar=True)
+      sg_path, pattern=pattern, progress_bar=True, **kwargs)
 
     for sg in sg_generator:
       for channel in channels:
