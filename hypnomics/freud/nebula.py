@@ -57,8 +57,9 @@ class Nebula(Nomear):
   @Nomear.property(local=True)
   def data_dict(self): return OrderedDict()
 
-  @property
+  @Nomear.property()
   def epoch_num_dict(self) -> dict:
+    # TODO: previously this property is not a Nomear.property ! BE AWARE
     od = OrderedDict()
     ck, pk = self.channels[0], self.probe_keys[0]
     for label in self.labels:

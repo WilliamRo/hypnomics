@@ -163,13 +163,14 @@ class Hans(Plotter):
     if label == 'W':
       ax.plot(x1, y1, 's', color=color)
     else:
-      propotion = len(m1) / self.nebula.get_epoch_total(
+      proportion = len(m1) / self.nebula.get_epoch_total(
         self.selected_clouds, excludes='W')
+
       alpha = 0.5
       total_size = 500
       ax.scatter([x1], [y1], s=total_size, c='none', marker='o',
                  edgecolors='grey', alpha=alpha)
-      ax.scatter([x1], [y1], s=propotion * total_size, color=color, alpha=1.0)
+      ax.scatter([x1], [y1], s=proportion * total_size, color=color, alpha=1.0)
 
     # (3) Plot covariance direction
     ax.plot([x1, x2], [y1, y2], '-', color=color, label=label)
@@ -270,3 +271,18 @@ class Hans(Plotter):
     self.register_a_shortcut('Up', lambda: self.set_lim('ymax'), 'Set ymax')
 
   # endregion: Shortcuts
+
+  # region: MISC
+
+  def set_lim(self, key):
+    if self.get(key) is not None:
+      self.set(key)
+      return
+
+    ax = self.pictor.canvas.axes2D
+    lim_dict = {}
+    lim_dict['xmin'], lim_dict['xmax'] = ax.get_xlim()
+    lim_dict['ymin'], lim_dict['ymax'] = ax.get_ylim()
+    self.set(key, value=lim_dict[key])
+
+  # endregion: MISC
