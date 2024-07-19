@@ -15,6 +15,7 @@
 from pictor import Pictor
 from hypnomics.freud.nebula import Nebula
 
+from .aristotle import Aristotle
 from .galileo import Galileo
 from .hans import Hans
 
@@ -24,9 +25,11 @@ class Telescope(Pictor):
 
   class Keys(Pictor.Keys):
     CHANNELS = 'ChAnNeLs'
+    PROBES = 'PrObEs'
 
   def __init__(self, nebula: Nebula, x_key: str, y_key: str,
-               title='Telescope', figure_size=(10, 6), **kwargs):
+               title='Telescope', figure_size=(10, 6),
+               plotters=('Hans', 'Galileo'), **kwargs):
     # Call parent's constructor
     super(Telescope, self).__init__(title, figure_size=figure_size)
     self.nebula = nebula
@@ -35,8 +38,17 @@ class Telescope(Pictor):
     self._initialize_scope()
 
     # Add plotter
-    self.add_plotter(Hans(self))
-    self.add_plotter(Galileo(self))
+    if isinstance(plotters, str):
+      _plotters = []
+      if 'H' in plotters: _plotters.append('Hans')
+      if 'G' in plotters: _plotters.append('Galileo')
+      if 'A' in plotters: _plotters.append('Aristotle')
+      plotters = _plotters
+
+    for plotter_key in plotters:
+      plotter_class = {
+        'Hans': Hans, 'Galileo': Galileo, 'Aristotle': Aristotle}[plotter_key]
+      self.add_plotter(plotter_class(self))
 
     # Set kwargs
     self.kwargs = kwargs
@@ -50,16 +62,30 @@ class Telescope(Pictor):
   def selected_channel(self): return self.get_element(self.Keys.CHANNELS)
 
   @property
-  def selected_pair(self):
+  def selected_probe(self): return self.get_element(self.Keys.PROBES)
+
+  @property
+  def selected_cluster_dict(self) -> dict:
+    """May be used by (1) dual viewers, (2) single viewers."""
     # e.g., 'sleepedf-SC4001E'
     sg_label = self.selected_clouds
     # e.g., 'EEG Fpz-Cz'
     channel_label = self.selected_channel
 
-    pair_dict = {}
-    for key in (self.x_key, self.y_key):
-      pair_dict[key] = self.nebula.data_dict[(sg_label, channel_label, key)]
-    return pair_dict
+    probe_keys = [self.x_key, self.y_key]
+    if self.selected_probe not in probe_keys:
+      probe_keys.append(self.selected_probe)
+
+    cluster_dict = {}
+    for key in probe_keys:
+      cluster_dict[key] = self.nebula.data_dict[(sg_label, channel_label, key)]
+    return cluster_dict
+
+  def get_stage_dict(self, sg_label, channel_label=None, probe_key=None):
+    """Currently this function is used by aristotle only"""
+    if channel_label is None: channel_label = self.selected_channel
+    if probe_key is None: probe_key = self.selected_probe
+    return self.nebula.data_dict[(sg_label, channel_label, probe_key)]
 
   # endregion: Properties
 
@@ -69,11 +95,15 @@ class Telescope(Pictor):
     # Set axis
     self.objects = self.nebula.labels
     self.set_to_axis(self.Keys.CHANNELS, self.nebula.channels)
+    self.set_to_axis(self.Keys.PROBES, self.nebula.probe_keys)
 
     # Initialize shortcuts
     self.shortcuts._library.pop('Escape')
     self._register_key('l', 'Next channel', self.Keys.CHANNELS, 1)
     self._register_key('h', 'Previous channel', self.Keys.CHANNELS, -1)
+
+    self._register_key('N', 'Next probe', self.Keys.PROBES, 1)
+    self._register_key('P', 'Previous probe', self.Keys.PROBES, -1)
 
   def _register_key(self, btn, des, key, v):
     self.shortcuts.register_key_event(

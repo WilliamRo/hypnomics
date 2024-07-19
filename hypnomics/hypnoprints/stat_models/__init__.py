@@ -12,22 +12,3 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ======-=========================================================-=============
-from .wavestats.amp_probes import estimate_amp_envelope_v1
-from .wavestats.freq_probes import estimate_average_freq
-from .wavestats.freq_probes import estimate_freq_stft_v1
-
-
-
-class ProbeLibrary(object):
-  amplitude = estimate_amp_envelope_v1
-  frequency_st = estimate_average_freq
-  frequency_stft = estimate_freq_stft_v1
-
-  extractors = {
-    'amplitude': amplitude,
-    'frequency_ft': frequency_st,
-    'frequency_stft': frequency_stft,
-  }
-
-
-pl = ProbeLibrary

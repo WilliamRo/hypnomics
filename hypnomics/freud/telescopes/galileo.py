@@ -78,11 +78,12 @@ class Galileo(Plotter):
     res_dict = {<bm_key>: {'W': array_w, 'N1': array_n1, ...}, ...}
     """
     # (0) Get selected data pair
-    res_dict: dict = self.pictor.selected_pair
-    assert len(res_dict) == 2
+    res_dict: dict = self.pictor.selected_cluster_dict
+    # assert len(res_dict) == 2
 
     # (1) Plot scatter/KDE/vector of each stage
-    x_key, y_key = list(res_dict.keys())
+    # x_key, y_key = list(res_dict.keys())
+    x_key, y_key = self.pictor.x_key, self.pictor.y_key
     X_all, Y_all = None, None
 
     # PATCH
@@ -267,9 +268,7 @@ class Galileo(Plotter):
     self.register_a_shortcut('w', lambda: self.flip('iw'), 'Toggle `iw`')
     self.register_a_shortcut('o', lambda: self.flip('io'), 'Toggle `io`')
 
-    self.register_a_shortcut('Left', lambda: self.set_lim('xmin'), 'Set xmin')
     self.register_a_shortcut('Right', lambda: self.set_lim('xmax'), 'Set xmax')
-    self.register_a_shortcut('Down', lambda: self.set_lim('ymin'), 'Set ymin')
     self.register_a_shortcut('Up', lambda: self.set_lim('ymax'), 'Set ymax')
 
   # endregion: Shortcuts

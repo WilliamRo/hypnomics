@@ -43,3 +43,15 @@ def estimate_freq_stft_v1(s: np.ndarray, fs: float, fmin=0.5, fmax=20) -> float:
   dom_f = np.sum(f[..., np.newaxis] * spectrum, axis=0) / (np.sum(
     spectrum, axis=0) + 1e-6)
   return np.average(dom_f)
+
+
+
+def estimate_average_freq(s: np.ndarray, fs: float, fmin=0.5, fmax=35) -> float:
+  """Estimate average frequency of a signal based on FFT."""
+  N = len(s)
+  X = np.fft.fft(s)
+  X_mag = np.abs(X) / N
+  f = np.fft.fftfreq(N, 1 / fs)
+  mask = (f > fmin) & (f < fmax)
+  avg_f = np.sum(f[mask] * X_mag[mask]) / np.sum(X_mag[mask])
+  return avg_f

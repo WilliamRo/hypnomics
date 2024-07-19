@@ -80,11 +80,11 @@ class Hans(Plotter):
     res_dict = {<bm_key>: {'W': array_w, 'N1': array_n1, ...}, ...}
     """
     # (0) Get selected data pair
-    res_dict: dict = self.pictor.selected_pair
-    assert len(res_dict) == 2
+    res_dict: dict = self.pictor.selected_cluster_dict
+    # assert len(res_dict) == 2
 
     # (1) Plot scatter/KDE/vector of each stage
-    x_key, y_key = list(res_dict.keys())
+    x_key, y_key = self.pictor.x_key, self.pictor.y_key
     X_all, Y_all = None, None
     for stage_key, color in self.STAGE_COLORS.items():
       if stage_key not in res_dict[x_key]: continue

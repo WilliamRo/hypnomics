@@ -87,24 +87,27 @@ class Nebula(Nomear):
     return fps
 
   def dual_view(self, x_key='FREQ-20', y_key='AMP-1', viewer_class=None,
-                title=None, fig_size=(10, 6), **configs):
+                title=None, fig_size=(10, 6), viewer_configs=None,
+                **probe_1_configs):
     """Visualize nebula in a 2-D space"""
     # Set default arguments
     if title is None: title = f'Delta={self.delta}'
+    if viewer_configs is None: viewer_configs = {}
 
     # Use default viewer (to be deprecated) if not specified
     if viewer_class is None:
       from sc.fp_viewer import FPViewer
 
       fps = self.to_walker_results(x_key=x_key, y_key=y_key)
-      fpv = FPViewer(walker_results=fps, title=title, figure_size=fig_size)
-      for k, v in configs.items(): fpv.plotters[0].set(k, v)
+      fpv = FPViewer(walker_results=fps, title=title, figure_size=fig_size,
+                     **viewer_configs)
+      for k, v in probe_1_configs.items(): fpv.plotters[0].set(k, v)
       fpv.show()
     else:
       # Use specified viewer
       viewer = viewer_class(nebula=self, x_key=x_key, y_key=y_key,
-                            title=title, figure_size=fig_size)
-      for k, v in configs.items(): viewer.plotters[0].set(k, v)
+                            title=title, figure_size=fig_size, **viewer_configs)
+      for k, v in probe_1_configs.items(): viewer.plotters[0].set(k, v)
       viewer.show()
 
   def set_labels(self, labels: list, check_sub_set=True):
