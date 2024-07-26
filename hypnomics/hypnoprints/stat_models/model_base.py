@@ -65,4 +65,15 @@ class HypnoModelBase(Nomear):
     tvd = 0.5 * np.sum(np.abs(P - Q) * d)
     return tvd
 
+
+  def calc_integral(self, p: stats.gaussian_kde, p_modifier=1.0):
+    # Define a set of points for evaluation
+    X = np.linspace(p.dataset.min(), p.dataset.max(), self.KDE_POINTS)
+    d = X[1] - X[0]
+
+    # Evaluate the densities
+    P = p(X) * p_modifier
+
+    return np.sum(P * d)
+
   # endregion: Common Estimators

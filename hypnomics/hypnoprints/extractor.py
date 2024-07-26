@@ -115,12 +115,13 @@ class Extractor(Nomear):
               fn_prefix = f'COV_{pi[:MAX_LEN]}/{pj[:MAX_LEN]}'
 
             # TODO: Handle empty cloud
-            if len(cloud_i) == 0:
+            if len(cloud_i) < 2:
               value = 0
             else:
               value = (np.std(cloud_i, dtype=float) if i == j
                            else np.cov(cloud_i, cloud_j)[0, 1])
 
+            assert not np.isnan(value)
             x_dict[f'{fn_prefix}_{fn_suffix}'] = value
 
     return x_dict

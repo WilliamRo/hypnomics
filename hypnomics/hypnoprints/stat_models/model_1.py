@@ -46,11 +46,15 @@ class HypnoModel1(HypnoModelBase):
     # Estimate constant c
     c_pool = []
     for key in self.cond_keys:
-      if key not in data_dict_1 and key not in data_dict_2: continue
+      if key not in data_dict_1 or key not in data_dict_2: continue
 
       x_1, x_2 = data_dict_1[key], data_dict_2[key]
+
+      if len(x_1) == 0 or len(x_2) == 0: continue
+
       _c = np.median(x_2) - np.median(x_1)
       weight = (len(x_1) + len(x_2)) / (N_1 + N_2)
+
       c_pool.append(_c * weight)
 
     c = np.sum(c_pool)
@@ -67,10 +71,17 @@ class HypnoModel1(HypnoModelBase):
       # Apply shift
       x_1 = np.array(x_1) + c
       # Estimate PDF
-      kde_1, kde_2 = [stats.gaussian_kde(x) for x in (x_1, x_2)]
+      kde_1, kde_2 = [stats.gaussian_kde(x) if len(x) > 1 else None
+                      for x in (x_1, x_2)]
 
-      # Calculate distance
-      distances.append(self.calc_distance_tv(kde_1, kde_2, m_1, m_2))
+      if any([kde is None for kde in (kde_1, kde_2)]):
+        if all([kde is None for kde in (kde_1, kde_2)]): distances.append(0)
+        else:
+          kde, m = (kde_1, m_1) if kde_2 is None else (kde_2, m_2)
+          distances.append(self.calc_integral(kde, m))
+      else:
+        # Calculate distance
+        distances.append(self.calc_distance_tv(kde_1, kde_2, m_1, m_2))
 
     return sum(distances)
 
