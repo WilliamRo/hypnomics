@@ -108,7 +108,7 @@ class Extractor(Nomear):
             pj = probe_keys[j]
             cloud_j = nebula.data_dict[(label, ck, pj)][sk]
 
-            MAX_LEN = 3
+            MAX_LEN = 5
             if i == j:
               fn_prefix = f'STD_{pi[:MAX_LEN]}'
             else:
@@ -137,7 +137,7 @@ class Extractor(Nomear):
 
         for sk in nebula.STAGE_KEYS:
           if sk == 'N2': continue
-          key = f'SS_{sk}_{pk[0]}_{ck.split(" ")[1]}'
+          key = f'SS_{sk}_{pk}_{ck.split(" ")[1]}'
 
           cloud = nebula.data_dict[(label, ck, pk)][sk]
           if len(cloud) == 0:
@@ -164,7 +164,7 @@ class Extractor(Nomear):
 
         for i, ck in enumerate(nebula.channels):
           if i == ch0_i: continue
-          key = f'CS_{ck.split(" ")[1]}_{sk}_{pk[0]}'
+          key = f'CS_{ck.split(" ")[1]}_{sk}_{pk}'
 
           cloud = nebula.data_dict[(label, ck, pk)][sk]
           if len(cloud) == 0:

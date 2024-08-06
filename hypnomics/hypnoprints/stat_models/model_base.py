@@ -49,31 +49,33 @@ class HypnoModelBase(Nomear):
     return X, Y
 
 
+
   def calc_distance_tv(self, p: stats.gaussian_kde, q: stats.gaussian_kde,
                        p_modifier=1.0, q_modifier=1.0):
     """Calculate total variation distance between two distributions."""
-    xmin = min(p.dataset.min(), q.dataset.min())
-    xmax = max(p.dataset.max(), q.dataset.max())
+    low_bounds = [min(p_data.min(), q_data.min())
+                  for p_data, q_data in zip(p.dataset, q.dataset)]
+    high_bounds = [max(p_data.max(), q_data.max())
+                   for p_data, q_data in zip(p.dataset, q.dataset)]
 
-    # Define a common set of points for evaluation
-    X = np.linspace(xmin, xmax, self.KDE_POINTS)
-    d = X[1] - X[0]
+    # E.g., X = [0.1, 0.2, ...], Y = [0.4, 0.5, ...]
+    grid_data = [np.linspace(low, high, self.KDE_POINTS)
+                 for low, high in zip(low_bounds, high_bounds)]
+    positions = np.vstack([grid.ravel() for grid in np.meshgrid(*grid_data)])
 
-    # Evaluate the densities
-    P, Q = p(X) * p_modifier, q(X) * q_modifier
+    P, Q = p(positions) * p_modifier, q(positions) * q_modifier
+
+    d = np.prod([grid[1] - grid[0] for grid in grid_data])
 
     tvd = 0.5 * np.sum(np.abs(P - Q) * d)
     return tvd
 
 
+
   def calc_integral(self, p: stats.gaussian_kde, p_modifier=1.0):
-    # Define a set of points for evaluation
-    X = np.linspace(p.dataset.min(), p.dataset.max(), self.KDE_POINTS)
-    d = X[1] - X[0]
+    low_bounds = [data.min() for data in p.dataset]
+    high_bounds = [data.max() for data in p.dataset]
 
-    # Evaluate the densities
-    P = p(X) * p_modifier
-
-    return np.sum(P * d)
+    return p.integrate_box(low_bounds, high_bounds) * p_modifier
 
   # endregion: Common Estimators

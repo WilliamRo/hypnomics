@@ -16,17 +16,33 @@ from .wavestats.amp_probes import estimate_amp_envelope_v1
 from .wavestats.freq_probes import estimate_average_freq
 from .wavestats.freq_probes import estimate_freq_stft_v1
 
+from .wavestats.power_probes import estimate_total_power
+from .wavestats.power_probes import estimate_delta_power_rela
+from .wavestats.power_probes import estimate_theta_power_rela
+from .wavestats.power_probes import estimate_alpha_power_rela
+from .wavestats.power_probes import estimate_beta_power_rela
+
 
 
 class ProbeLibrary(object):
   amplitude = estimate_amp_envelope_v1
   frequency_st = estimate_average_freq
   frequency_stft = estimate_freq_stft_v1
+  total_power = estimate_total_power
+  relative_power_delta = estimate_delta_power_rela
+  relative_power_theta = estimate_theta_power_rela
+  relative_power_alpha = estimate_alpha_power_rela
+  relative_power_beta = estimate_beta_power_rela
 
   extractors = {
     'amplitude': amplitude,
     'frequency_ft': frequency_st,
     'frequency_stft': frequency_stft,
+    'total_power': total_power,
+    'relative_power_delta': relative_power_delta,
+    'relative_power_theta': relative_power_theta,
+    'relative_power_alpha': relative_power_alpha,
+    'relative_power_beta': relative_power_beta,
   }
 
 
