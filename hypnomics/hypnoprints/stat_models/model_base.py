@@ -51,19 +51,25 @@ class HypnoModelBase(Nomear):
 
 
   def calc_distance_tv(self, p: stats.gaussian_kde, q: stats.gaussian_kde,
-                       p_modifier=1.0, q_modifier=1.0):
+                       p_modifier=1.0, q_modifier=1.0, p_shifts=None):
     """Calculate total variation distance between two distributions."""
-    low_bounds = [min(p_data.min(), q_data.min())
-                  for p_data, q_data in zip(p.dataset, q.dataset)]
-    high_bounds = [max(p_data.max(), q_data.max())
-                   for p_data, q_data in zip(p.dataset, q.dataset)]
+    # Set `kde_1_shifts` to default if not provided
+    if p_shifts is None: p_shifts = [0.0] * p.d
+    assert len(p_shifts) == p.d == q.d
+
+    # Determine bounds
+    low_bounds = [min(p_data.min() + c, q_data.min())
+                  for p_data, q_data, c in zip(p.dataset, q.dataset, p_shifts)]
+    high_bounds = [max(p_data.max() + c, q_data.max())
+                   for p_data, q_data, c in zip(p.dataset, q.dataset, p_shifts)]
 
     # E.g., X = [0.1, 0.2, ...], Y = [0.4, 0.5, ...]
     grid_data = [np.linspace(low, high, self.KDE_POINTS)
                  for low, high in zip(low_bounds, high_bounds)]
-    positions = np.vstack([grid.ravel() for grid in np.meshgrid(*grid_data)])
+    q_positions = np.vstack([grid.ravel() for grid in np.meshgrid(*grid_data)])
+    p_positions = q_positions - np.reshape(p_shifts, (-1, 1))
 
-    P, Q = p(positions) * p_modifier, q(positions) * q_modifier
+    P, Q = p(p_positions) * p_modifier, q(q_positions) * q_modifier
 
     d = np.prod([grid[1] - grid[0] for grid in grid_data])
 

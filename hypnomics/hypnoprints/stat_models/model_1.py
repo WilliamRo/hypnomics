@@ -31,11 +31,20 @@ class HypnoModel1(HypnoModelBase):
      p_{\psi_{m, n}(t)}(x, t) = p_{\gamma_m}(x - c), in which c is a constant.
    """
 
+  MIN_POINTS = 10
+
   def __init__(self, cond_keys=('N1', 'N2', 'N3', 'R'), pdf_estimator='kde',
                distance_estimator='tv'):
     self.cond_keys = cond_keys
     self.distance_estimator = distance_estimator
     self.pdf_estimator = pdf_estimator
+
+
+  def est_gauss_kde(self, x: np.ndarray, key_prefix, key_suffix):
+    if key_prefix is None: return stats.gaussian_kde(x)
+
+    key = ('GAUSS_KDE_BUFFER', key_prefix, key_suffix)
+    return self.get_from_pocket(key, initializer=lambda: stats.gaussian_kde(x))
 
 
   def calc_upsilon(self, data_dict_1, data_dict_2, N_1=None, N_2=None):
@@ -61,7 +70,8 @@ class HypnoModel1(HypnoModelBase):
     return c
 
 
-  def calc_distance(self, data_dict_1: dict, data_dict_2: dict):
+  def calc_distance(self, data_dict_1: dict, data_dict_2: dict,
+                    data_1_key=None, data_2_key=None):
     """data_dict =
       {'W': [...], 'N1': [...], 'N2': [...], 'N3': [...], 'R': [...]} """
     # Calculate total number for estimating p(cond)
@@ -74,17 +84,13 @@ class HypnoModel1(HypnoModelBase):
     # Calculate distances for each condition (sleep stage)
     distances = []
     for key in self.cond_keys:
-      # if key not in data_dict_1 and key not in data_dict_2: continue
-      # assert key in data_dict_1 and key in data_dict_2, f"!! Key {key} not found !!"
-
       x_1, x_2 = data_dict_1[key], data_dict_2[key]
       m_1, m_2 = len(x_1) / N_1, len(x_2) / N_2
 
-      # Apply shift
-      x_1 = np.array(x_1) + c
       # Estimate PDF
-      kde_1, kde_2 = [stats.gaussian_kde(x) if len(x) > 1 else None
-                      for x in (x_1, x_2)]
+      kde_1, kde_2 = [
+        self.est_gauss_kde(x, k, key) if len(x) > self.MIN_POINTS else None
+        for x, k in zip((x_1, x_2), (data_1_key, data_2_key))]
 
       if any([kde is None for kde in (kde_1, kde_2)]):
         if all([kde is None for kde in (kde_1, kde_2)]): distances.append(0.)
@@ -94,13 +100,14 @@ class HypnoModel1(HypnoModelBase):
           distances.append(self.calc_integral(kde, m))
       else:
         # Calculate distance
-        distances.append(self.calc_distance_tv(kde_1, kde_2, m_1, m_2))
+        distances.append(self.calc_distance_tv(kde_1, kde_2, m_1, m_2,
+                                               p_shifts=[c]))
 
     return sum(distances)
 
 
-  def calc_joint_distance(self, data_dict_pair_1: tuple,
-                          data_dict_pair_2: tuple):
+  def calc_joint_distance(self, data_dict_pair_1, data_dict_pair_2,
+                          key_pair_1=None, key_pair_2=None):
     """data_dict =
       {'W': [...], 'N1': [...], 'N2': [...], 'N3': [...], 'R': [...]} """
 
@@ -131,10 +138,10 @@ class HypnoModel1(HypnoModelBase):
       x_1_pk2 = np.array(x_1_pk2) + c_2
 
       # Estimate PDF
-      kde_1 = (stats.gaussian_kde(np.stack([x_1_pk1, x_1_pk2], axis=0))
-               if len(x_1_pk1) > 1 else None)
-      kde_2 = (stats.gaussian_kde(np.stack([x_2_pk1, x_2_pk2], axis=0))
-               if len(x_2_pk1) > 1 else None)
+      kde_1 = (self.est_gauss_kde(np.stack([x_1_pk1, x_1_pk2]), key_pair_1, key)
+               if len(x_1_pk1) > self.MIN_POINTS else None)
+      kde_2 = (self.est_gauss_kde(np.stack([x_2_pk1, x_2_pk2]), key_pair_2, key)
+               if len(x_2_pk1) > self.MIN_POINTS else None)
 
       if any([kde is None for kde in (kde_1, kde_2)]):
         if all([kde is None for kde in (kde_1, kde_2)]): distances.append(0.)
