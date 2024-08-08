@@ -52,7 +52,7 @@ class Hans(Plotter):
     self.new_settable_attr(
       'iw', False, bool, 'Option to ignore wake for axis limits')
     self.new_settable_attr(
-      'io', True, bool, 'Option to ignore ourliers for axis limits')
+      'io', True, bool, 'Option to ignore outliers for axis limits')
 
   # region: Properties
 
