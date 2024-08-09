@@ -133,10 +133,6 @@ class HypnoModel1(HypnoModelBase):
       x_2_pk1, x_2_pk2 = data_2_pk1[key], data_2_pk2[key]
       m_1, m_2 = len(x_1_pk1) / N_1, len(x_2_pk1) / N_2
 
-      # Apply shift
-      x_1_pk1 = np.array(x_1_pk1) + c_1
-      x_1_pk2 = np.array(x_1_pk2) + c_2
-
       # Estimate PDF
       kde_1 = (self.est_gauss_kde(np.stack([x_1_pk1, x_1_pk2]), key_pair_1, key)
                if len(x_1_pk1) > self.MIN_POINTS else None)
@@ -150,6 +146,7 @@ class HypnoModel1(HypnoModelBase):
           distances.append(self.calc_integral(kde, m))
       else:
         # Calculate distance
-        distances.append(self.calc_distance_tv(kde_1, kde_2, m_1, m_2))
+        distances.append(self.calc_distance_tv(kde_1, kde_2, m_1, m_2,
+                                               p_shifts=[c_1, c_2]))
 
     return sum(distances)
