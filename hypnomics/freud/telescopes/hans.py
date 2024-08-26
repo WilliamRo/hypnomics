@@ -121,7 +121,7 @@ class Hans(Plotter):
     # (2) Set title, axis labels, and legend
     clouds_label = self.selected_clouds
     channel_label = self.selected_channel
-    ax.set_title(f'{clouds_label} ({channel_label})')
+    ax.set_title(f'{clouds_label} ({channel_label}){self.pictor.meta_suffix}')
 
     ax.set_xlabel(self.pictor.x_key)
     ax.set_ylabel(self.pictor.y_key)

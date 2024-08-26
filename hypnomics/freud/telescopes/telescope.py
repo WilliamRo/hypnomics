@@ -29,13 +29,15 @@ class Telescope(Pictor):
 
   def __init__(self, nebula: Nebula, x_key: str, y_key: str,
                title='Telescope', figure_size=(10, 6),
-               plotters=('Hans', 'Galileo'), **kwargs):
+               plotters=('Hans', 'Galileo'), meta_keys=(), **kwargs):
     # Call parent's constructor
     super(Telescope, self).__init__(title, figure_size=figure_size)
     self.nebula = nebula
     self.x_key = x_key
     self.y_key = y_key
     self._initialize_scope()
+
+    self.meta_keys = meta_keys
 
     # Add plotter
     if isinstance(plotters, str):
@@ -86,6 +88,14 @@ class Telescope(Pictor):
     if channel_label is None: channel_label = self.selected_channel
     if probe_key is None: probe_key = self.selected_probe
     return self.nebula.data_dict[(sg_label, channel_label, probe_key)]
+
+  @property
+  def meta_suffix(self) -> str:
+    if len(self.meta_keys) == 0: return ''
+    # e.g., 'sleepedf-SC4001E'
+    sg_label = self.selected_clouds
+    return ' | ' + ', '.join([f'{k}: {self.nebula.meta[sg_label][k]}'
+                              for k in self.meta_keys])
 
   # endregion: Properties
 

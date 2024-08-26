@@ -171,7 +171,9 @@ def get_sg_stage_epoch_dict(sg: SignalGroup, stage_key, time_resolution=30):
 
     se_dict, cursor = {k: [] for k in STAGE_KEYS}, 0
     for interval, anno_id in zip(anno.intervals, anno.annotations):
-      n = int((interval[-1] - interval[0]) / time_resolution)
+      n = int(np.round(((interval[-1] - interval[0]) / time_resolution)))
+      assert n > 0
+
       sid = map_dict[anno_id]
       if sid is not None:
         skey = STAGE_KEYS[map_dict[anno_id]]

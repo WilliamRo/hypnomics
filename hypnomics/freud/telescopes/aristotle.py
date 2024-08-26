@@ -147,7 +147,8 @@ class Aristotle(Plotter):
     ax.set_xlabel(self.selected_probe)
     ax.legend()
 
-    ax.set_title(f'{clouds_label} ({channel_label}){title_suffix}')
+    title = f'{clouds_label} ({channel_label}){title_suffix}'
+    ax.set_title(title + self.pictor.meta_suffix)
 
     # Set axis limits
     global_ymax = self.get('ymax')

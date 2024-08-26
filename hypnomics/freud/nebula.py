@@ -27,10 +27,12 @@ from roma import io
 
 class Nebula(Nomear):
   """Nebula.data_dict =
-  {
-    (clouds_label, channel, probe_key):
-    {'W': [...], 'N1': [...], 'N2': [...], 'N3': [...], 'R': [...]}
-  }
+    {
+      (clouds_label, channel, probe_key):
+      {'W': [...], 'N1': [...], 'N2': [...], 'N3': [...], 'R': [...]}
+    }
+
+    Nebula.
   """
 
   STAGE_KEYS = STAGE_KEYS
@@ -47,6 +49,9 @@ class Nebula(Nomear):
 
   @Nomear.property(local=True)
   def labels(self): return []
+
+  @Nomear.property(local=True)
+  def meta(self): return OrderedDict()
 
   @Nomear.property(local=True)
   def channels(self): return []
@@ -168,6 +173,59 @@ class Nebula(Nomear):
     return np.mean(cloud)
 
   # endregion: Reference
+
+  # region: Evolution
+
+  def gen_evolution(self, meta_key, intervals, iqr=False) -> 'Nebula':
+    """Generate evolution of this nebula by merging centered clouds.
+
+    Args:
+      meta_key: str, key in meta dict, e.g., 'age'.
+      intervals: list, intervals of meta_key, e.g., [(0, 20), (20, 40), ...].
+    """
+    # (0) Initialize evolution nebula
+    evo = Nebula(self.time_resolution, name=f'{self.name}_{meta_key}_evolution')
+
+    # (1) Generate evolution
+    for low, high in intervals:
+      # (1.1) Find sample labels
+      labels = [k for k, v in self.meta.items() if low <= v[meta_key] < high]
+      if len(labels) == 0: continue
+      evo_label = f'{meta_key} in [{low}, {high})'
+      evo.labels.append(evo_label)
+
+      # (1.2) Traverse channels and probes
+      for pid in labels:
+        for ck in self.channels:
+          if ck not in evo.channels: evo.channels.append(ck)
+
+          for pk in self.probe_keys:
+            # (1.2.1) Initialize if necessary
+            if pk not in evo.probe_keys: evo.probe_keys.append(pk)
+            if (evo_label, ck, pk) not in evo.data_dict:
+              evo.data_dict[(evo_label, ck, pk)] = {sk: [] for sk in STAGE_KEYS}
+
+            # (1.2.2) Calculate center
+            mu = self.get_center(pid, ck, pk, 'N2')
+
+            # (1.2.3) Merge clouds
+            for sk in STAGE_KEYS:
+              cloud = [x - mu for x in self.data_dict[(pid, ck, pk)][sk]]
+              evo.data_dict[(evo_label, ck, pk)][sk].extend(cloud)
+
+      # (1.3) Keep data within the IQR if required
+      if iqr:
+        for ck in evo.channels:
+          for pk in evo.probe_keys:
+            for sk in STAGE_KEYS:
+              pass
+              # evo.data_dict[(evo_label, ck, pk)][sk] = remove_outliers(
+              #   evo.data_dict[(evo_label, ck, pk)][sk])
+
+    # (-1) Return evolution nebula
+    return evo
+
+  # endregion: Evolution
 
   # endregion: Lab Methods
 
