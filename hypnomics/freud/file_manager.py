@@ -63,8 +63,15 @@ class FileManager(Nomear):
     self._check_path(sg_path, create=create_if_not_exist)
 
     if channel is not None:
-      channel_path = os.path.join(sg_path, channel)
-      self._check_path(channel_path, create=create_if_not_exist)
+      if isinstance(channel, (list, tuple)):
+        # This will only happen in the case of (2) in `load_nebula`
+        channel_paths = [os.path.join(sg_path, ch) for ch in channel]
+        channel_paths = [cp for cp in channel_paths if os.path.exists(cp)]
+        assert len(channel_paths) == 1, f'More than one channel path found: {channel_paths}'
+        channel_path = channel_paths[0]
+      else:
+        channel_path = os.path.join(sg_path, channel)
+        self._check_path(channel_path, create=create_if_not_exist)
 
       if time_resolution is not None:
         tr_path = os.path.join(channel_path, f"{time_resolution}s")
@@ -98,12 +105,32 @@ class FileManager(Nomear):
 
   def load_nebula(self, sg_labels: list, channels: list, time_resolution: int,
                   probe_keys: list, name='Nebula') -> Nebula:
+    """Load a Nebula object from the given signal group labels, channels,
+    time resolution, and probe keys.
+
+    Args
+    ----
+    channels: list of channel names. Can be:
+    (1) ['EEG Fpz-Oz', 'EEG Fz-Cz'];
+    (2) [('EEG F3-REF', 'EEG F3-CLE', 'EEG F3-LER'),
+         ('EEG F4-REF', 'EEG F4-CLE', 'EEG F4-LER')].
+        In this case, each `channel` in the list is a tuple of channel names.
+        The second to the last channels will be renamed to the first channel.
+    """
     nebula = Nebula(time_resolution, name=name)
 
     for sg_label in sg_labels:
       nebula.labels.append(sg_label)
 
       for channel in channels:
+        # Case (2)
+        if isinstance(channel, (tuple, list)):
+          channel, aliases = channel[0], channel[1:]
+        else:
+          assert isinstance(channel, str), f'Invalid channel: {channel}'
+          channel, aliases = channel, [channel]
+
+        # Add channel keys to Nebula if has not registered yet
         if channel not in nebula.channels:
           nebula.channels.append(channel)
 
@@ -111,8 +138,10 @@ class FileManager(Nomear):
           if probe_key not in nebula.probe_keys:
             nebula.probe_keys.append(probe_key)
 
+          # Load clouds
+          assert isinstance(aliases, (list, tuple))
           clouds_path, b_exist = self._check_hierarchy(
-            sg_label, channel=channel, time_resolution=time_resolution,
+            sg_label, channel=aliases, time_resolution=time_resolution,
             feature_name=probe_key, create_if_not_exist=False)
 
           assert b_exist, f'`{clouds_path}` not found.'

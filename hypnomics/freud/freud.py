@@ -41,12 +41,20 @@ class Freud(FileManager):
                       time_resolutions: list, extractor_dict: dict=None,
                       overwrite=False, **kwargs):
     """Generate clouds from signal group and save in a hierarchy structure."""
+    # (0) Get configurations
+    CHANNEL_SHOULD_EXIST = kwargs.get('channel_should_exist', True)
+
+    # (*)
     sg_generator = self._get_signal_group_generator(
       sg_path, pattern=pattern, progress_bar=True, **kwargs)
 
     for sg in sg_generator:
       for channel in channels:
         ds: DigitalSignal = sg.digital_signals[0]
+
+        if not CHANNEL_SHOULD_EXIST and channel not in ds.channels_names:
+          continue
+
         chn_index = ds.channels_names.index(channel)
         for tr in time_resolutions:
           # Sanity check for time_resolutions
