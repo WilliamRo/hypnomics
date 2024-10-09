@@ -13,19 +13,25 @@
 # limitations under the License.
 # ====-======================================================================-==
 """Freud knows everything about hypnomics."""
+import numpy as np
+from tensorflow.python.keras.backend import dtype
+
 from .file_manager import FileManager
 
 from collections import OrderedDict
 
 from hypnomics.hypnoprints.hp_extractor import DEFAULT_STAGE_KEY
+from hypnomics.hypnoprints.hp_extractor import get_stage_map_dict
 from hypnomics.hypnoprints.hp_extractor import STAGE_KEYS
 from hypnomics.hypnoprints.hp_extractor import get_sg_stage_epoch_dict
 
 from pictor.objects.signals.signal_group import DigitalSignal
-from pictor.objects.signals.signal_group import SignalGroup
+from pictor.objects.signals.signal_group import SignalGroup, Annotation
 
 from roma import console
 from roma import io
+
+import os
 
 
 
@@ -84,6 +90,90 @@ class Freud(FileManager):
 
             # Save clouds
             io.save_file(clouds, cloud_path, verbose=True)
+
+
+  def generate_macro_features(self, sg_path: str, pattern: str,
+                              config: str = 'alpha', overwrite=False, **kwargs):
+    """Generate macro features from signal group and save in a hierarchy
+    structure.
+
+    Args
+    ----
+    config: str, optional, default='alpha'.
+      configs:
+        - 'alpha': (a) Percentage of W/R/N1/N2/N3, totally 5 features
+                   (b) Transition probability from W/R/N1/N2/N3 to W/R/N1/N2/N3,
+                       totally 25 features
+                   (c) Transition per hour, totally 1 feature.
+                   Totally 31 features. Ref: sun2019 (a & b)
+    epoch_len: int, optional, default=30. For some subsets in MASS dataset,
+               epoch_len = 20 s
+    """
+
+    assert config == 'alpha', f"!! Unsupported config: {config} !!"
+
+    EPOCH_LEN = kwargs.get('epoch_len', 30)
+
+    # Create a sg_generator
+    sg_generator = self._get_signal_group_generator(
+      sg_path, pattern=pattern, progress_bar=True, **kwargs)
+
+    # Extract macro features for each sg file
+    for sg in sg_generator:
+      # Check path
+      sg_path = self._check_hierarchy(sg.label, create_if_not_exist=True)
+      macro_path = os.path.join(sg_path, f'macro_{config}.od')
+      if os.path.exists(macro_path) and not overwrite: continue
+
+      # Calculate macro features
+      anno: Annotation = sg.annotations[DEFAULT_STAGE_KEY]
+      map_dict = get_stage_map_dict(sg, DEFAULT_STAGE_KEY)
+      stages = [map_dict[a] for a in anno.annotations]
+      interval_stage = list(zip(anno.intervals, stages))
+
+      # Remove wake stage from both end
+      while interval_stage[0][1] == 0: interval_stage.pop(0)
+      while interval_stage[-1][1] == 0: interval_stage.pop(-1)
+
+      x_dict = OrderedDict()
+
+      # (1) Calculate percentage of W/N1/N2/N3/R
+      # (1.1) Calculate total duration
+      T = sum([t[1] - t[0] for t, _ in interval_stage])
+      for i, sk in enumerate(STAGE_KEYS):
+        duration = sum([t[1] - t[0] for t, s in interval_stage if s == i])
+        x_dict[f'{sk}_Percentage'] = duration / T
+
+      # (2) Calculate transition probability from W/N1/N2/N3/R to W/N1/N2/N3/R
+      matrix = np.zeros((5, 5), dtype=np.float32)
+      # (2.1) Count transition
+      transition_count = -1
+      for i, (t, si) in enumerate(interval_stage):
+        duration = t[1] - t[0]
+        assert duration - duration // EPOCH_LEN * EPOCH_LEN < 1e-6
+
+        # Add transition from previous stage to current stage
+        if i > 0:
+          s0 = interval_stage[i - 1][1]
+          if s0 != si: transition_count += 1
+          if s0 is not None: matrix[s0, si] += 1
+
+        if si is None: continue
+
+        # Add transition in current stage interval
+        matrix[si, si] += duration / EPOCH_LEN - 1
+
+      # (2.2) Calculate transition probability
+      matrix = matrix / np.sum(matrix)
+      for i, sk_i in enumerate(STAGE_KEYS):
+        for j, sk_j in enumerate(STAGE_KEYS):
+          x_dict[f'Transition_Probability_{sk_i}_to_{sk_j}'] = matrix[i, j]
+
+      # (3) Calculate transition per hour
+      x_dict['Transition_per_Hour'] = transition_count / (T / 3600)
+
+      # Save macro feature vector
+      io.save_file(x_dict, macro_path, verbose=True)
 
   # endregion: Public Methods
 
