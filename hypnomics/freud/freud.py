@@ -164,7 +164,8 @@ class Freud(FileManager):
         matrix[si, si] += duration / EPOCH_LEN - 1
 
       # (2.2) Calculate transition probability
-      matrix = matrix / np.sum(matrix)
+      matrix = matrix / (np.sum(matrix, axis=1, keepdims=True) + 1e-6)
+
       for i, sk_i in enumerate(STAGE_KEYS):
         for j, sk_j in enumerate(STAGE_KEYS):
           x_dict[f'Transition_Probability_{sk_i}_to_{sk_j}'] = matrix[i, j]
