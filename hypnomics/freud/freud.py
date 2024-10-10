@@ -86,7 +86,14 @@ class Freud(FileManager):
             # Generate cloud dict and save
             clouds = OrderedDict()
             for sk in STAGE_KEYS:
-              clouds[sk] = [extractor(s[:, chn_index]) for s in segments[sk]]
+              # clouds[sk] = [extractor(s[:, chn_index]) for s in segments[sk]]
+              # Sometimes s is float16, causing kurtosis estimation to yield
+              #   nan value.
+              clouds[sk] = [extractor(s[:, chn_index].astype(np.float32))
+                            for s in segments[sk]]
+
+              assert not any(np.isnan(clouds[sk]))
+              assert not any(np.isinf(clouds[sk]))
 
             # Save clouds
             io.save_file(clouds, cloud_path, verbose=True)

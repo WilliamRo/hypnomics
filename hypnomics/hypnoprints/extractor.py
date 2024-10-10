@@ -36,6 +36,8 @@ class Extractor(Nomear):
     'include_stage_shift': True,
     'include_channel_shift': True,
     'include_stage_wise_covariance': True,
+
+    'include_stage_mean': False,
   }
 
   def __init__(self, **settings):
@@ -55,6 +57,9 @@ class Extractor(Nomear):
 
     if self.settings['include_stage_wise_covariance']:
       self.extractors.append(self.extract_stage_wise_covariance)
+
+    if self.settings['include_stage_mean']:
+      self.extractors.append(self.extract_stage_mean)
 
   # region: Properties
 
@@ -187,6 +192,26 @@ class Extractor(Nomear):
       if sk == 'W': continue
       x_key = f'P_{sk}'
       x_dict[x_key] = nebula.epoch_num_dict[label][sk] / total
+
+    return x_dict
+
+  def extract_stage_mean(self, nebula: Nebula, label):
+    """Extract mean of each sleep stage for each channel."""
+    x_dict = OrderedDict()
+
+    for ck in nebula.channels:
+      for pk in nebula.probe_keys:
+        for sk in nebula.STAGE_KEYS:
+          key = f'AVG_{sk}_{pk}_{ck.split(" ")[1]}'
+
+          cloud = nebula.data_dict[(label, ck, pk)][sk]
+          if len(cloud) == 0:
+            # TODO: Handle empty cloud
+            value = 0
+          else:
+            value = self._calc_mean(cloud)
+
+          x_dict[key] = value
 
     return x_dict
 
