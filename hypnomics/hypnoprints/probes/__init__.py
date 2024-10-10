@@ -22,6 +22,12 @@ from .wavestats.power_probes import estimate_theta_power_rela
 from .wavestats.power_probes import estimate_alpha_power_rela
 from .wavestats.power_probes import estimate_beta_power_rela
 
+from .wavestats.sun17 import mean_absolute_gradient
+from .wavestats.sun17 import kurtosis
+from .wavestats.sun17 import sample_entropy
+from .wavestats.sun17 import relative_power_stats
+from .wavestats.sun17 import band_kurtosis
+
 
 
 class ProbeLibrary(object):
@@ -34,6 +40,12 @@ class ProbeLibrary(object):
   relative_power_alpha = estimate_alpha_power_rela
   relative_power_beta = estimate_beta_power_rela
 
+  mean_absolute_gradient = mean_absolute_gradient
+  kurtosis = kurtosis
+  sample_entropy = sample_entropy
+  relative_power_stats = relative_power_stats
+  band_kurtosis = band_kurtosis
+
   extractors = {
     'amplitude': amplitude,
     'frequency_ft': frequency_st,
@@ -43,6 +55,11 @@ class ProbeLibrary(object):
     'relative_power_theta': relative_power_theta,
     'relative_power_alpha': relative_power_alpha,
     'relative_power_beta': relative_power_beta,
+    'mean_absolute_gradient': mean_absolute_gradient,
+    'kurtosis': kurtosis,
+    'sample_entropy': sample_entropy,
+    'relative_power_stats': relative_power_stats,
+    'band_kurtosis': band_kurtosis,
   }
 
 
