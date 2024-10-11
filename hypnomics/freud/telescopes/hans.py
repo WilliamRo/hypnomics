@@ -97,7 +97,7 @@ class Hans(Plotter):
         x_key: {'All': np.concatenate(
           [res_dict[x_key][sk] for sk in self.STAGE_COLORS.keys()])},
         y_key: {'All': np.concatenate(
-          [res_dict[y_key][sk] for sk in self.STAGE_COLORS.keys()])}
+          [res_dict[y_key][sk] for sk in self.STAGE_COLORS.keys()])
       }
 
     for stage_key, color in stage_colors.items():
