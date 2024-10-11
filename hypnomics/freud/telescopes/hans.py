@@ -49,6 +49,8 @@ class Hans(Plotter):
 
     self.new_settable_attr('margin', 0.2, float, 'margin')
 
+    self.new_settable_attr('conditional', True, bool, 'Conditional')
+
     self.new_settable_attr(
       'iw', False, bool, 'Option to ignore wake for axis limits')
     self.new_settable_attr(
@@ -86,7 +88,19 @@ class Hans(Plotter):
     # (1) Plot scatter/KDE/vector of each stage
     x_key, y_key = self.pictor.x_key, self.pictor.y_key
     X_all, Y_all = None, None
-    for stage_key, color in self.STAGE_COLORS.items():
+    stage_colors = self.STAGE_COLORS
+
+    # (1.1) Merge stages in non-conditional case
+    if not self.get('conditional'):
+      stage_colors = {'All': 'grey'}
+      res_dict = {
+        x_key: {'All': np.concatenate(
+          [res_dict[x_key][sk] for sk in self.STAGE_COLORS.keys()])},
+        y_key: {'All': np.concatenate(
+          [res_dict[y_key][sk] for sk in self.STAGE_COLORS.keys()])}
+      }
+
+    for stage_key, color in stage_colors.items():
       if stage_key not in res_dict[x_key]: continue
       Xs, Ys = res_dict[x_key][stage_key], res_dict[y_key][stage_key]
 
@@ -264,6 +278,7 @@ class Hans(Plotter):
                              'Toggle `show_vector`')
     self.register_a_shortcut('w', lambda: self.flip('iw'), 'Toggle `iw`')
     self.register_a_shortcut('o', lambda: self.flip('io'), 'Toggle `io`')
+    self.register_a_shortcut('c', lambda: self.flip('conditional'), 'Toggle `conditional`')
 
     self.register_a_shortcut('Left', lambda: self.set_lim('xmin'), 'Set xmin')
     self.register_a_shortcut('Right', lambda: self.set_lim('xmax'), 'Set xmax')

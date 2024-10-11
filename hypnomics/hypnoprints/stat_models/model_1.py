@@ -71,11 +71,19 @@ class HypnoModel1(HypnoModelBase):
 
 
   def calc_distance(self, data_dict_1: dict, data_dict_2: dict,
-                    data_1_key=None, data_2_key=None):
+                    data_1_key=None, data_2_key=None, conditional=True):
     """data_dict =
       {'W': [...], 'N1': [...], 'N2': [...], 'N3': [...], 'R': [...]} """
+    cond_keys = self.cond_keys
+
+    # Check if conditional
+    if not conditional:
+      data_dict_1 = {'*': np.concatenate([data_dict_1[k] for k in cond_keys])}
+      data_dict_2 = {'*': np.concatenate([data_dict_2[k] for k in cond_keys])}
+      cond_keys = ['*']
+
     # Calculate total number for estimating p(cond)
-    N_1, N_2 = [sum([len(d[k]) for k in self.cond_keys])
+    N_1, N_2 = [sum([len(d[k]) for k in cond_keys])
                 for d in (data_dict_1, data_dict_2)]
 
     # Estimate constant c
@@ -83,7 +91,7 @@ class HypnoModel1(HypnoModelBase):
 
     # Calculate distances for each condition (sleep stage)
     distances = []
-    for key in self.cond_keys:
+    for key in cond_keys:
       x_1, x_2 = data_dict_1[key], data_dict_2[key]
       m_1, m_2 = len(x_1) / N_1, len(x_2) / N_2
 
