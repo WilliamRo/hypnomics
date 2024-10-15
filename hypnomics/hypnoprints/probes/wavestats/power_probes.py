@@ -60,7 +60,7 @@ def estimate_power(s: np.ndarray, fs: float, fmin=0.5, fmax=30,
   assert band in band_dict
   low, high = band_dict[band]
   band_power = simps(psd[(freqs > low) & (freqs <= high)], dx=freq_res)
-  return band_power / total_power
+  return band_power / (total_power + 1e-6)
 
 
 estimate_total_power = estimate_power

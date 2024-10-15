@@ -53,5 +53,5 @@ def estimate_average_freq(s: np.ndarray, fs: float, fmin=0.5, fmax=35) -> float:
   X_mag = np.abs(X) / N
   f = np.fft.fftfreq(N, 1 / fs)
   mask = (f > fmin) & (f < fmax)
-  avg_f = np.sum(f[mask] * X_mag[mask]) / np.sum(X_mag[mask])
+  avg_f = np.sum(f[mask] * X_mag[mask]) / (np.sum(X_mag[mask]) + 1e-6)
   return avg_f

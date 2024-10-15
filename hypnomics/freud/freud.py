@@ -49,6 +49,7 @@ class Freud(FileManager):
     """Generate clouds from signal group and save in a hierarchy structure."""
     # (0) Get configurations
     CHANNEL_SHOULD_EXIST = kwargs.get('channel_should_exist', True)
+    SKIP_INVALID = kwargs.get('skip_invalid', False)
 
     # (*)
     sg_generator = self._get_signal_group_generator(
@@ -85,6 +86,8 @@ class Freud(FileManager):
 
             # Generate cloud dict and save
             clouds = OrderedDict()
+
+            do_not_save = False
             for sk in STAGE_KEYS:
               # clouds[sk] = [extractor(s[:, chn_index]) for s in segments[sk]]
               # Sometimes s is float16, causing kurtosis estimation to yield
@@ -92,11 +95,18 @@ class Freud(FileManager):
               clouds[sk] = [extractor(s[:, chn_index].astype(np.float32))
                             for s in segments[sk]]
 
-              assert not any(np.isnan(clouds[sk]))
-              assert not any(np.isinf(clouds[sk]))
+              if any(np.isnan(clouds[sk])) or any(np.isinf(clouds[sk])):
+                console.warning(f"!! Invalid value detected in {sg.label}-{channel}-{feature_key} !!")
+                if SKIP_INVALID:
+                  do_not_save = True
+                  continue
+                else:
+                  # TODO: currently let downstream handle the NaN issue
+                  pass
+                  # raise ValueError('!! Invalid value detected !!')
 
             # Save clouds
-            io.save_file(clouds, cloud_path, verbose=True)
+            if not do_not_save: io.save_file(clouds, cloud_path, verbose=True)
 
 
   def generate_macro_features(self, sg_path: str, pattern: str,

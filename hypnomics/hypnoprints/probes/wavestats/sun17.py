@@ -98,7 +98,8 @@ def relative_power_stats(s: np.ndarray, fs: float, band1, band2, stat_key) -> fl
   b1 = _estimate_power(s, fs, band1)
   b2 = _estimate_power(s, fs, band2)
   rel_power = b1 / (b2 + 1e-6)
-  return STAT_DICT[stat_key](rel_power)
+  value = STAT_DICT[stat_key](rel_power)
+  return value
 
 
 def band_kurtosis(s: np.ndarray, fs: float, band: str) -> float:
