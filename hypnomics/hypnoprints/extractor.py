@@ -96,6 +96,32 @@ class Extractor(Nomear):
       data = remove_outliers(data)
     return np.mean(data)
 
+  def _get_ck(self, channel_key: str):
+    ck_list = channel_key.split(" ")
+    if len(ck_list) == 1:
+      # e.g., ck = 'Fpz-Cz'
+      _ck = ck_list[0]
+    else:
+      assert len(ck_list) == 2
+      # e.g., ck = 'EEG Fpz-Cz'
+      _ck = ck_list[1]
+    return _ck
+
+  def _get_cloud(self, neb: Nebula, pid, ck, pk, sk, remove_none=True):
+    _cloud = neb.data_dict[(pid, ck, pk)][sk]
+
+    # Remove invalid values from _cloud
+    if remove_none: _cloud = np.array(
+      [x for x in _cloud if not any([np.isnan(x), np.isinf(x)])])
+
+    return _cloud
+
+  def _remove_none(self, cloud_1, cloud_2):
+    cloud_1, cloud_2 = np.array(cloud_1), np.array(cloud_2)
+    nan_mask = np.logical_or(np.isnan(cloud_1), np.isnan(cloud_2))
+    mask = np.logical_not(nan_mask)
+    return cloud_1[mask], cloud_2[mask]
+
   # endregion: Private Methods
 
   # region: Build-in Extractors
@@ -109,13 +135,18 @@ class Extractor(Nomear):
     for ck in nebula.channels:
       for sk in nebula.STAGE_KEYS:
         n_probes = len(probe_keys)
-        fn_suffix = f'{sk}_{ck.split(" ")[1]}'
+        fn_suffix = f'{sk}_{self._get_ck(ck)}'
         for i in range(n_probes):
           pi = probe_keys[i]
-          cloud_i = nebula.data_dict[(label, ck, pi)][sk]
+          cloud_i = self._get_cloud(nebula, label, ck, pi, sk,
+                                    remove_none=False)
+
           for j in range(i, n_probes):
             pj = probe_keys[j]
-            cloud_j = nebula.data_dict[(label, ck, pj)][sk]
+            cloud_j = self._get_cloud(nebula, label, ck, pj, sk,
+                                      remove_none=False)
+
+            _cloud_i, _cloud_j = self._remove_none(cloud_i, cloud_j)
 
             MAX_LEN = 5
             if i == j:
@@ -124,11 +155,11 @@ class Extractor(Nomear):
               fn_prefix = f'COV_{pi[:MAX_LEN]}/{pj[:MAX_LEN]}'
 
             # TODO: Handle empty cloud
-            if len(cloud_i) < 2:
+            if len(_cloud_i) < 2:
               value = 0
             else:
-              value = (np.std(cloud_i, dtype=float) if i == j
-                           else np.cov(cloud_i, cloud_j)[0, 1])
+              value = (np.std(_cloud_i, dtype=float) if i == j
+                       else np.cov(_cloud_i, _cloud_j)[0, 1])
 
             assert not np.isnan(value)
             x_dict[f'{fn_prefix}_{fn_suffix}'] = value
@@ -141,14 +172,14 @@ class Extractor(Nomear):
 
     for ck in nebula.channels:
       for pk in nebula.probe_keys:
-        n2_cloud = nebula.data_dict[(label, ck, pk)]['N2']
+        n2_cloud = self._get_cloud(nebula, label, ck, pk, 'N2')
         mu_N2 = self._calc_mean(n2_cloud)
 
         for sk in nebula.STAGE_KEYS:
           if sk == 'N2': continue
-          key = f'SS_{sk}_{pk}_{ck.split(" ")[1]}'
+          key = f'SS_{sk}_{pk}_{self._get_ck(ck)}'
 
-          cloud = nebula.data_dict[(label, ck, pk)][sk]
+          cloud = self._get_cloud(nebula, label, ck, pk, sk)
           if len(cloud) == 0:
             # TODO: Handle empty cloud
             value = 0
@@ -165,7 +196,7 @@ class Extractor(Nomear):
 
     for pk in nebula.probe_keys:
       for sk in nebula.STAGE_KEYS:
-        cloud = nebula.data_dict[(label, nebula.channels[ch0_i], pk)][sk]
+        cloud = self._get_cloud(nebula, label, nebula.channels[ch0_i], pk, sk)
         if len(cloud) == 0:
           ch0_mu = 0
         else:
@@ -173,9 +204,9 @@ class Extractor(Nomear):
 
         for i, ck in enumerate(nebula.channels):
           if i == ch0_i: continue
-          key = f'CS_{ck.split(" ")[1]}_{sk}_{pk}'
+          key = f'CS_{self._get_ck(ck)}_{sk}_{pk}'
 
-          cloud = nebula.data_dict[(label, ck, pk)][sk]
+          cloud = self._get_cloud(nebula, label, ck, pk, sk)
           if len(cloud) == 0:
             value = 0
           else:
@@ -208,7 +239,7 @@ class Extractor(Nomear):
         for sk in nebula.STAGE_KEYS:
           key = f'AVG_{sk}_{pk}_{ck.split(" ")[1]}'
 
-          cloud = nebula.data_dict[(label, ck, pk)][sk]
+          cloud = self._get_cloud(nebula, label, ck, pk, sk)
           if len(cloud) == 0:
             # TODO: Handle empty cloud
             value = 0
