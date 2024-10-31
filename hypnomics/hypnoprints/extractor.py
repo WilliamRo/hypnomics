@@ -38,7 +38,7 @@ class Extractor(Nomear):
     'include_stage_wise_covariance': True,
 
     'include_stage_mean': False,
-    'include_all_mean': False,
+    'include_all_mean_std': False,
   }
 
   def __init__(self, **settings):
@@ -62,8 +62,8 @@ class Extractor(Nomear):
     if self.settings['include_stage_mean']:
       self.extractors.append(self.extract_stage_mean)
 
-    if self.settings['include_all_mean']:
-      self.extractors.append(self.extract_all_mean)
+    if self.settings['include_all_mean_std']:
+      self.extractors.append(self.extract_mean_std)
 
   # region: Properties
 
@@ -95,6 +95,11 @@ class Extractor(Nomear):
     if self.settings.get('remove_outliers', True):
       data = remove_outliers(data)
     return np.mean(data)
+
+  def _calc_std(self, data):
+    if self.settings.get('remove_outliers', True):
+      data = remove_outliers(data)
+    return np.std(data)
 
   def _get_ck(self, channel_key: str):
     ck_list = channel_key.split(" ")
@@ -250,21 +255,22 @@ class Extractor(Nomear):
 
     return x_dict
 
-  def extract_all_mean(self, nebula: Nebula, label):
-    """Extract mean of all sleep stage for each channel."""
+  def extract_mean_std(self, nebula: Nebula, label):
+    """Extract mean and STD of all sleep stage for each channel."""
     x_dict = OrderedDict()
+
+    key_methods = (('AVG', self._calc_mean), ('STD', self._calc_std))
 
     for ck in nebula.channels:
       for pk in nebula.probe_keys:
+        for k, f in key_methods:
+          key = f'{k}_{pk}_{ck.split(" ")[1]}'
+          cloud = np.concatenate([nebula.data_dict[(label, ck, pk)][sk]
+                                  for sk in nebula.STAGE_KEYS])
+          assert len(cloud) > 0
+          value = f(cloud)
 
-        key = f'AVG_{pk}_{ck.split(" ")[1]}'
-
-        cloud = np.concatenate([nebula.data_dict[(label, ck, pk)][sk]
-                                for sk in nebula.STAGE_KEYS])
-        assert len(cloud) > 0
-        value = self._calc_mean(cloud)
-
-        x_dict[key] = value
+          x_dict[key] = value
 
     return x_dict
 

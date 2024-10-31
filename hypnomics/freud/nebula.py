@@ -121,6 +121,13 @@ class Nebula(Nomear):
         assert lb in self.labels, f"!! Label `{lb}` not found !!"
     self.put_into_pocket('labels', labels, local=True, exclusive=False)
 
+  def set_probe_keys(self, probe_keys: list, check_sub_set=True):
+    if check_sub_set:
+      for pk in probe_keys:
+        assert pk in self.probe_keys, f'!! Probe key `{pk}` not found !!'
+    self.put_into_pocket('probe_keys', probe_keys, local=True,
+                         exclusive=False)
+
   # endregion: Public Methods
 
   # region: IO
