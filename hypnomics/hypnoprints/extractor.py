@@ -42,6 +42,10 @@ class Extractor(Nomear):
   }
 
   def __init__(self, **settings):
+    # Sanity check
+    for k in settings:
+      assert k in self.DEFAULT_SETTINGS, f"!! Invalid setting: {k} !!"
+
     # Initialize settings
     self.settings = self.DEFAULT_SETTINGS.copy()
     self.settings.update(settings)
