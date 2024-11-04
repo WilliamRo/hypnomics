@@ -215,7 +215,7 @@ class Extractor(Nomear):
 
   def extract_inter_stage_features(self, nebula: Nebula, label):
     # (1) Get buffer
-    if self._x_dict_buffer is None:
+    if len(self._x_dict_buffer) == 0:
       x_dict_buffer = self.extract_statistical_features(nebula, label)
     else:
       x_dict_buffer = self._x_dict_buffer
@@ -261,7 +261,7 @@ class Extractor(Nomear):
 
   def extract_inter_channel_features(self, nebula: Nebula, label):
     # (1) Get buffer
-    if self._x_dict_buffer is None:
+    if len(self._x_dict_buffer) == 0:
       x_dict_buffer = self.extract_statistical_features(nebula, label)
     else:
       x_dict_buffer = self._x_dict_buffer
