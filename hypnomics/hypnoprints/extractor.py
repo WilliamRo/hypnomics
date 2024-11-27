@@ -418,7 +418,7 @@ class Extractor(Nomear):
     for ck in nebula.channels:
       for pk in nebula.probe_keys:
         for sk in nebula.STAGE_KEYS:
-          key = f'AVG_{sk}_{pk}_{ck.split(" ")[1]}'
+          key = f'AVG_{sk}_{pk}_{self._get_ck(ck)}'
 
           cloud = self._get_cloud(nebula, label, ck, pk, sk)
           if len(cloud) == 0:

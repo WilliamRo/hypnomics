@@ -13,9 +13,6 @@
 # limitations under the License.
 # ====-======================================================================-==
 """Freud knows everything about hypnomics."""
-import numpy as np
-from tensorflow.python.keras.backend import dtype
-
 from .file_manager import FileManager
 
 from collections import OrderedDict
@@ -32,6 +29,7 @@ from roma import console
 from roma import io
 
 import os
+import numpy as np
 
 
 

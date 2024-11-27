@@ -85,6 +85,9 @@ class Aristotle(Plotter):
 
     X_all, Y_all = None, None
     for stage_key, color in self.STAGE_COLORS.items():
+      # Ignore wake stage if required
+      if self.get('iw') and stage_key == 'W': continue
+
       # Get Xs
       if stage_key not in res_dict: continue
       Xs = res_dict[stage_key]
@@ -96,11 +99,6 @@ class Aristotle(Plotter):
         self.show_kde(ax, Xs, color, stage_key, modifier=modifier,
                       linestyle=linestyle)
       else: self.show_histogram(ax, Xs, color, stage_key)
-
-      # Ignore wake stage if necessary
-      if self.get('iw'):
-        # Ignore wake stage if required
-        if stage_key == 'W': continue
 
       # Gather Xs
       if X_all is None: X_all = Xs
