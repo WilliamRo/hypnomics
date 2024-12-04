@@ -26,10 +26,12 @@ from pictor.objects.signals.signal_group import DigitalSignal
 from pictor.objects.signals.signal_group import SignalGroup, Annotation
 
 from roma import console
+from roma import finder
 from roma import io
 
 import os
 import numpy as np
+import threading
 
 
 
@@ -48,63 +50,144 @@ class Freud(FileManager):
     # (0) Get configurations
     CHANNEL_SHOULD_EXIST = kwargs.get('channel_should_exist', True)
     SKIP_INVALID = kwargs.get('skip_invalid', False)
+    PARA_CHANNEL = kwargs.get('parallel_channel', False)
+    SG_PARA_N = kwargs.get('sg_para_number', 1)
 
-    # (*)
-    sg_generator = self._get_signal_group_generator(
-      sg_path, pattern=pattern, progress_bar=True, **kwargs)
-
-    for sg in sg_generator:
-      for channel in channels:
-        ds: DigitalSignal = sg.digital_signals[0]
-
-        if not CHANNEL_SHOULD_EXIST and channel not in ds.channels_names:
-          continue
-
-        chn_index = ds.channels_names.index(channel)
+    # Create sg_generator, this is for more accuracy progress bar
+    def sg_filter(_path):
+      for ck in channels:
         for tr in time_resolutions:
-          # Sanity check for time_resolutions
-          if 30 % tr != 0: raise NotImplementedError(
-              "!! Time resolution should be a factor of 30 !!")
+          for pk in extractor_dict.keys():
+            assert _path[-1] != '/'
+            sg_label = os.path.basename(_path)
+            sg_label = sg_label.split('(')[0]
+            _, b_exist = self._check_hierarchy(
+              sg_label, channel=ck, time_resolution=tr, feature_name=pk,
+              create_if_not_exist=False, return_false_if_not_exist=True)
+            if not b_exist: return True
+      return False
 
-          # This is to save processing time if clouds have already been saved
-          segments = None
+    sg_file_list = finder.walk(sg_path, pattern=pattern)
+    n_all_files = len(sg_file_list)
+    sg_file_list = [path for path in sg_file_list if sg_filter(path)]
 
-          # Extract clouds using specified extractors
-          for feature_key, extractor in extractor_dict.items():
-            cloud_path, b_exist = self._check_hierarchy(
-              sg.label, channel=channel, time_resolution=tr,
-              feature_name=feature_key, create_if_not_exist=True)
-            if b_exist and not overwrite: continue
+    # Return sg_file_list if required
+    if kwargs.get('return_sg_file_list', False):
+      return sg_file_list, n_all_files
 
-            console.print_progress()
+    # Split sg_file_list
+    sg_sub_lists = [sg_file_list[i::SG_PARA_N] for i in range(SG_PARA_N)]
 
-            # Initialize segments if necessary
-            if segments is None:
-              segments = get_sg_stage_epoch_dict(sg, DEFAULT_STAGE_KEY, tr)
+    def thread_func(_sg_sub_list):
+      sg_generator = self._get_signal_group_generator(
+        sg_path, pattern=pattern, progress_bar=True,
+        sg_file_list=_sg_sub_list, **kwargs)
 
-            # Generate cloud dict and save
-            clouds = OrderedDict()
+      for sg in sg_generator:
+        self._generate_clouds_in_sg(
+          sg=sg, channels=channels, time_resolutions=time_resolutions,
+          extractor_dict=extractor_dict, overwrite=overwrite,
+          SKIP_INVALID=SKIP_INVALID, CHANNEL_SHOULD_EXIST=CHANNEL_SHOULD_EXIST,
+          PARA_CHANNEL=PARA_CHANNEL)
 
-            do_not_save = False
-            for sk in STAGE_KEYS:
-              # clouds[sk] = [extractor(s[:, chn_index]) for s in segments[sk]]
-              # Sometimes s is float16, causing kurtosis estimation to yield
-              #   nan value.
-              clouds[sk] = [extractor(s[:, chn_index].astype(np.float32))
-                            for s in segments[sk]]
+    # Run each thread
+    threads = []
+    for sg_sub_list in sg_sub_lists:
+      t = threading.Thread(target=thread_func, args=(sg_sub_list,))
+      threads.append(t)
+      t.start()
 
-              if any(np.isnan(clouds[sk])) or any(np.isinf(clouds[sk])):
-                console.warning(f"!! Invalid value detected in {sg.label}-{channel}-{feature_key} !!")
-                if SKIP_INVALID:
-                  do_not_save = True
-                  continue
-                else:
-                  # TODO: currently let downstream handle the NaN issue
-                  pass
-                  # raise ValueError('!! Invalid value detected !!')
+    # Wait for all threads to finish
+    for t in threads: t.join()
 
-            # Save clouds
-            if not do_not_save: io.save_file(clouds, cloud_path, verbose=True)
+    # sg_generator = self._get_signal_group_generator(
+    #   sg_path, pattern=pattern, progress_bar=True,
+    #   sg_file_list=sg_file_list, **kwargs)
+    #
+    # for sg in sg_generator:
+    #   self._generate_clouds_in_sg(
+    #     sg=sg, channels=channels, time_resolutions=time_resolutions,
+    #     extractor_dict=extractor_dict, overwrite=overwrite,
+    #     SKIP_INVALID=SKIP_INVALID, CHANNEL_SHOULD_EXIST=CHANNEL_SHOULD_EXIST,
+    #     PARA_CHANNEL=PARA_CHANNEL)
+
+
+  def _generate_clouds_in_sg(self, sg: SignalGroup, channels, time_resolutions,
+                             extractor_dict, overwrite, SKIP_INVALID,
+                             CHANNEL_SHOULD_EXIST, PARA_CHANNEL):
+
+    # Define a function to generate clouds in a channel
+    def generate_clouds_in_channel(channel):
+      ds: DigitalSignal = sg.digital_signals[0]
+
+      chn_index = ds.channels_names.index(channel)
+      for tr in time_resolutions:
+        # Sanity check for time_resolutions
+        if 30 % tr != 0: raise NotImplementedError(
+          "!! Time resolution should be a factor of 30 !!")
+
+        # This is to save processing time if clouds have already been saved
+        segments = None
+
+        # Extract clouds using specified extractors
+        for feature_key, extractor in extractor_dict.items():
+          cloud_path, b_exist = self._check_hierarchy(
+            sg.label, channel=channel, time_resolution=tr,
+            feature_name=feature_key, create_if_not_exist=True)
+          if b_exist and not overwrite: continue
+
+          console.print_progress()
+
+          # Initialize segments if necessary
+          if segments is None:
+            segments = get_sg_stage_epoch_dict(sg, DEFAULT_STAGE_KEY, tr)
+
+          # Generate cloud dict and save
+          clouds = OrderedDict()
+
+          do_not_save = False
+          for sk in STAGE_KEYS:
+            # clouds[sk] = [extractor(s[:, chn_index]) for s in segments[sk]]
+            # Sometimes s is float16, causing kurtosis estimation to yield
+            #   nan value.
+            clouds[sk] = [extractor(s[:, chn_index].astype(np.float32))
+                          for s in segments[sk]]
+
+            if any(np.isnan(clouds[sk])) or any(np.isinf(clouds[sk])):
+              console.warning(
+                f"!! Invalid value detected in {sg.label}-{channel}-{feature_key} !!")
+              if SKIP_INVALID:
+                do_not_save = True
+                continue
+              else:
+                # TODO: currently let downstream handle the NaN issue
+                pass
+                # raise ValueError('!! Invalid value detected !!')
+
+          # Save clouds
+          if not do_not_save: io.save_file(clouds, cloud_path, verbose=True)
+
+    threads = []
+    for channel in channels:
+      ds: DigitalSignal = sg.digital_signals[0]
+
+      if not CHANNEL_SHOULD_EXIST and channel not in ds.channels_names:
+        continue
+
+      # Check sg folder first to avoid conflicts
+      self._check_hierarchy(sg.label, create_if_not_exist=True)
+
+      # Extract clouds for each channel
+      if PARA_CHANNEL:
+        t = threading.Thread(target=generate_clouds_in_channel,
+                             args=(channel,))
+        threads.append(t)
+        t.start()
+      else:
+        generate_clouds_in_channel(channel)
+
+    # Wait for all threads to finish
+    for t in threads: t.join()
 
 
   def generate_macro_features(self, sg_path: str, pattern: str,

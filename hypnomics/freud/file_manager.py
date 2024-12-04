@@ -58,9 +58,11 @@ class FileManager(Nomear):
     return True
 
   def _check_hierarchy(self, sg_label: str, channel=None, time_resolution=None,
-                       feature_name=None, create_if_not_exist=True):
+                       feature_name=None, create_if_not_exist=True,
+                       return_false_if_not_exist=False):
     sg_path = os.path.join(self.work_dir, sg_label)
-    self._check_path(sg_path, create=create_if_not_exist)
+    self._check_path(sg_path, create=create_if_not_exist,
+                     return_false_if_not_exist=return_false_if_not_exist)
 
     if channel is not None:
       if isinstance(channel, (list, tuple)):
@@ -71,11 +73,13 @@ class FileManager(Nomear):
         channel_path = channel_paths[0]
       else:
         channel_path = os.path.join(sg_path, channel)
-        self._check_path(channel_path, create=create_if_not_exist)
+        self._check_path(channel_path, create=create_if_not_exist,
+                         return_false_if_not_exist=return_false_if_not_exist)
 
       if time_resolution is not None:
         tr_path = os.path.join(channel_path, f"{time_resolution}s")
-        self._check_path(tr_path, create=create_if_not_exist)
+        self._check_path(tr_path, create=create_if_not_exist,
+                         return_false_if_not_exist=return_false_if_not_exist)
 
         if feature_name is not None:
           feature_path = os.path.join(tr_path, f"{feature_name}.clouds")
@@ -88,8 +92,11 @@ class FileManager(Nomear):
 
   def _get_signal_group_generator(self, sg_path: str, pattern: str,
                                   progress_bar=False, **kwargs):
-    sg_file_list = finder.walk(sg_path, pattern=pattern)
+    # Get sg_file_list
+    sg_file_list = kwargs.get(
+      'sg_file_list', finder.walk(sg_path, pattern=pattern))
 
+    # ...
     N = kwargs.get('max_n_sg', None)
     if N is not None: sg_file_list = sg_file_list[:N]
 
