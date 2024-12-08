@@ -90,19 +90,28 @@ class FileManager(Nomear):
       else: return channel_path
     else: return sg_path
 
-  def _get_signal_group_generator(self, sg_path: str, pattern: str,
-                                  progress_bar=False, **kwargs):
+  def _get_signal_group_generator(
+      self, sg_path: str, pattern: str, progress_bar=False,
+      sg_file_list=None, **kwargs):
+
     # Get sg_file_list
-    sg_file_list = kwargs.get(
-      'sg_file_list', finder.walk(sg_path, pattern=pattern))
+    if sg_file_list is None:
+      _sg_file_list = finder.walk(sg_path, pattern=pattern)
+    else:
+      _sg_file_list = sg_file_list
+      console.show_status(f'Using provided sg_file_list (N={len(sg_file_list)}) ...')
 
     # ...
     N = kwargs.get('max_n_sg', None)
-    if N is not None: sg_file_list = sg_file_list[:N]
+    if N is not None:
+      _sg_file_list = _sg_file_list[:N]
+      console.show_status(f'Selected first {N} signal group files ...')
 
-    for i, file_path in enumerate(sg_file_list):
-      if progress_bar: console.print_progress(i, len(sg_file_list))
+    for i, file_path in enumerate(_sg_file_list):
       sg: SignalGroup = io.load_file(file_path, verbose=True)
+      console.show_status(f'Signal group `{sg.label}` has been loaded.')
+
+      if progress_bar: console.print_progress(i, len(_sg_file_list))
       yield sg
       del sg
 

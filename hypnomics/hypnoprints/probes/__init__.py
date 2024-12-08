@@ -21,6 +21,7 @@ from .wavestats.power_probes import estimate_delta_power_rela
 from .wavestats.power_probes import estimate_theta_power_rela
 from .wavestats.power_probes import estimate_alpha_power_rela
 from .wavestats.power_probes import estimate_beta_power_rela
+from .wavestats.power_probes import PowerProbes
 
 from .wavestats.sun17 import mean_absolute_gradient
 from .wavestats.sun17 import kurtosis
@@ -39,6 +40,8 @@ class ProbeLibrary(object):
   relative_power_theta = estimate_theta_power_rela
   relative_power_alpha = estimate_alpha_power_rela
   relative_power_beta = estimate_beta_power_rela
+
+  class_power_group = PowerProbes
 
   mean_absolute_gradient = mean_absolute_gradient
   kurtosis = kurtosis

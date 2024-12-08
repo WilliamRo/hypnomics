@@ -19,8 +19,9 @@ from collections import OrderedDict
 
 from hypnomics.hypnoprints.hp_extractor import DEFAULT_STAGE_KEY
 from hypnomics.hypnoprints.hp_extractor import get_stage_map_dict
-from hypnomics.hypnoprints.hp_extractor import STAGE_KEYS
 from hypnomics.hypnoprints.hp_extractor import get_sg_stage_epoch_dict
+from hypnomics.hypnoprints.probes.probe_group import ProbeGroup
+from hypnomics.hypnoprints.hp_extractor import STAGE_KEYS
 
 from pictor.objects.signals.signal_group import DigitalSignal
 from pictor.objects.signals.signal_group import SignalGroup, Annotation
@@ -51,65 +52,83 @@ class Freud(FileManager):
     CHANNEL_SHOULD_EXIST = kwargs.get('channel_should_exist', True)
     SKIP_INVALID = kwargs.get('skip_invalid', False)
     PARA_CHANNEL = kwargs.get('parallel_channel', False)
-    SG_PARA_N = kwargs.get('sg_para_number', 1)
+    # SG_PARA_N = kwargs.get('sg_para_number', 1)
 
     # Create sg_generator, this is for more accuracy progress bar
-    def sg_filter(_path):
+    def sg_filter(_path=None, _sg_label=None):
       for ck in channels:
         for tr in time_resolutions:
-          for pk in extractor_dict.keys():
-            assert _path[-1] != '/'
-            sg_label = os.path.basename(_path)
-            sg_label = sg_label.split('(')[0]
-            _, b_exist = self._check_hierarchy(
-              sg_label, channel=ck, time_resolution=tr, feature_name=pk,
-              create_if_not_exist=False, return_false_if_not_exist=True)
-            if not b_exist: return True
+          for pk, probe in extractor_dict.items():
+            if _sg_label is None:
+              assert _path is not None and _path[-1] != '/'
+              sg_label = os.path.basename(_path)
+              sg_label = sg_label.split('(')[0]
+            else: sg_label = _sg_label
+
+            if isinstance(probe, ProbeGroup): pk_list = probe.probe_keys
+            else: pk_list = [pk]
+
+            b_exist_list = [
+              self._check_hierarchy(
+                sg_label, channel=ck, time_resolution=tr, feature_name=pk,
+                create_if_not_exist=False, return_false_if_not_exist=True)[1]
+            for pk in pk_list]
+
+            if not all(b_exist_list): return True
       return False
 
     sg_file_list = finder.walk(sg_path, pattern=pattern)
     n_all_files = len(sg_file_list)
-    sg_file_list = [path for path in sg_file_list if sg_filter(path)]
+    if not overwrite:
+      sg_file_list = [path for path in sg_file_list if sg_filter(path)]
 
     # Return sg_file_list if required
     if kwargs.get('return_sg_file_list', False):
       return sg_file_list, n_all_files
 
     # Split sg_file_list
-    sg_sub_lists = [sg_file_list[i::SG_PARA_N] for i in range(SG_PARA_N)]
-
-    def thread_func(_sg_sub_list):
-      sg_generator = self._get_signal_group_generator(
-        sg_path, pattern=pattern, progress_bar=True,
-        sg_file_list=_sg_sub_list, **kwargs)
-
-      for sg in sg_generator:
-        self._generate_clouds_in_sg(
-          sg=sg, channels=channels, time_resolutions=time_resolutions,
-          extractor_dict=extractor_dict, overwrite=overwrite,
-          SKIP_INVALID=SKIP_INVALID, CHANNEL_SHOULD_EXIST=CHANNEL_SHOULD_EXIST,
-          PARA_CHANNEL=PARA_CHANNEL)
-
-    # Run each thread
-    threads = []
-    for sg_sub_list in sg_sub_lists:
-      t = threading.Thread(target=thread_func, args=(sg_sub_list,))
-      threads.append(t)
-      t.start()
-
-    # Wait for all threads to finish
-    for t in threads: t.join()
-
-    # sg_generator = self._get_signal_group_generator(
-    #   sg_path, pattern=pattern, progress_bar=True,
-    #   sg_file_list=sg_file_list, **kwargs)
+    # sg_sub_lists = [sg_file_list[i::SG_PARA_N] for i in range(SG_PARA_N)]
     #
-    # for sg in sg_generator:
-    #   self._generate_clouds_in_sg(
-    #     sg=sg, channels=channels, time_resolutions=time_resolutions,
-    #     extractor_dict=extractor_dict, overwrite=overwrite,
-    #     SKIP_INVALID=SKIP_INVALID, CHANNEL_SHOULD_EXIST=CHANNEL_SHOULD_EXIST,
-    #     PARA_CHANNEL=PARA_CHANNEL)
+    # def thread_func(_sg_sub_list):
+    #   sg_generator = self._get_signal_group_generator(
+    #     sg_path, pattern=pattern, progress_bar=True,
+    #     sg_file_list=_sg_sub_list, **kwargs)
+    #
+    #   for sg in sg_generator:
+    #     self._generate_clouds_in_sg(
+    #       sg=sg, channels=channels, time_resolutions=time_resolutions,
+    #       extractor_dict=extractor_dict, overwrite=overwrite,
+    #       SKIP_INVALID=SKIP_INVALID, CHANNEL_SHOULD_EXIST=CHANNEL_SHOULD_EXIST,
+    #       PARA_CHANNEL=PARA_CHANNEL)
+    #
+    # # Run each thread
+    # threads = []
+    # for sg_sub_list in sg_sub_lists:
+    #   t = threading.Thread(target=thread_func, args=(sg_sub_list,))
+    #   threads.append(t)
+    #   t.start()
+    #
+    # # Wait for all threads to finish
+    # for t in threads: t.join()
+
+    sg_generator = self._get_signal_group_generator(
+      sg_path, pattern=pattern, progress_bar=True,
+      sg_file_list=sg_file_list, **kwargs)
+
+    from hypnomics.hypnoprints.probes.wavestats.power_probes import _BUFFER
+
+    for sg in sg_generator:
+      if not sg_filter(_sg_label=sg.label):
+        console.warning(f'Clouds of `{sg.label}` has been created.')
+
+      self._generate_clouds_in_sg(
+        sg=sg, channels=channels, time_resolutions=time_resolutions,
+        extractor_dict=extractor_dict, overwrite=overwrite,
+        SKIP_INVALID=SKIP_INVALID, CHANNEL_SHOULD_EXIST=CHANNEL_SHOULD_EXIST,
+        PARA_CHANNEL=PARA_CHANNEL)
+
+      # Clear buffer
+      _BUFFER.clear()
 
 
   def _generate_clouds_in_sg(self, sg: SignalGroup, channels, time_resolutions,
@@ -117,10 +136,11 @@ class Freud(FileManager):
                              CHANNEL_SHOULD_EXIST, PARA_CHANNEL):
 
     # Define a function to generate clouds in a channel
-    def generate_clouds_in_channel(channel):
+    def generate_clouds_in_channel(channel, progress=True):
       ds: DigitalSignal = sg.digital_signals[0]
 
       chn_index = ds.channels_names.index(channel)
+      # (tr)
       for tr in time_resolutions:
         # Sanity check for time_resolutions
         if 30 % tr != 0: raise NotImplementedError(
@@ -129,49 +149,77 @@ class Freud(FileManager):
         # This is to save processing time if clouds have already been saved
         segments = None
 
-        # Extract clouds using specified extractors
+        # (tr-pk) Extract clouds using specified extractors
         for feature_key, extractor in extractor_dict.items():
-          cloud_path, b_exist = self._check_hierarchy(
-            sg.label, channel=channel, time_resolution=tr,
-            feature_name=feature_key, create_if_not_exist=True)
-          if b_exist and not overwrite: continue
+          # (1) Check if the cloud already exists
+          cloud_path_list, b_exist_list, pk_list = [], [], []
+          if isinstance(extractor, ProbeGroup): pk_list = extractor.probe_keys
+          else: pk_list = [feature_key]
 
-          console.print_progress()
+          for pk in pk_list:
+            cloud_path, b_exist = self._check_hierarchy(
+              sg.label, channel=channel, time_resolution=tr,
+              feature_name=pk, create_if_not_exist=False)
+            cloud_path_list.append(cloud_path)
+            b_exist_list.append(b_exist)
 
-          # Initialize segments if necessary
+          if all(b_exist_list) and not overwrite: continue
+
+          if progress: console.print_progress()
+
+          # (2) Initialize segments if necessary
           if segments is None:
             segments = get_sg_stage_epoch_dict(sg, DEFAULT_STAGE_KEY, tr)
 
-          # Generate cloud dict and save
-          clouds = OrderedDict()
+          # (3) Generate and save clouds
+          if isinstance(extractor, ProbeGroup):
+            # (3.1) If extractor is a ProbeGroup
+            clouds_dict: dict = extractor.generate_clouds(segments, chn_index)
 
-          do_not_save = False
-          for sk in STAGE_KEYS:
-            # clouds[sk] = [extractor(s[:, chn_index]) for s in segments[sk]]
-            # Sometimes s is float16, causing kurtosis estimation to yield
-            #   nan value.
-            clouds[sk] = [extractor(s[:, chn_index].astype(np.float32))
-                          for s in segments[sk]]
+            for pk, clouds in clouds_dict.items():
+              # (3.1.1) Get cloud path
+              cloud_path, b_exist = self._check_hierarchy(
+                sg.label, channel=channel, time_resolution=tr,
+                feature_name=pk, create_if_not_exist=False)
 
-            if any(np.isnan(clouds[sk])) or any(np.isinf(clouds[sk])):
-              console.warning(
-                f"!! Invalid value detected in {sg.label}-{channel}-{feature_key} !!")
-              if SKIP_INVALID:
-                do_not_save = True
-                continue
-              else:
-                # TODO: currently let downstream handle the NaN issue
-                pass
-                # raise ValueError('!! Invalid value detected !!')
+              # (3.1.2) Save clouds
+              io.save_file(clouds, cloud_path, verbose=True)
 
-          # Save clouds
-          if not do_not_save: io.save_file(clouds, cloud_path, verbose=True)
+          else:
+            # (3.2) If extractor is a callable function
+            clouds = OrderedDict()
+
+            do_not_save = False
+            for sk in STAGE_KEYS:
+              # clouds[sk] = [extractor(s[:, chn_index]) for s in segments[sk]]
+              # Sometimes s is float16, causing kurtosis estimation to yield
+              #   nan value.
+              # (3.2.1) Extract a cloud for each stage
+              clouds[sk] = [extractor(s[:, chn_index].astype(np.float32))
+                            for s in segments[sk]]
+
+              if any(np.isnan(clouds[sk])) or any(np.isinf(clouds[sk])):
+                console.warning(
+                  f"!! Invalid value detected in {sg.label}-{channel}-{feature_key} !!")
+                if SKIP_INVALID:
+                  do_not_save = True
+                  continue
+                else:
+                  # TODO: currently let downstream handle the NaN issue
+                  pass
+                  # raise ValueError('!! Invalid value detected !!')
+
+            # (3.2.3) Save clouds
+            assert len(cloud_path_list) == 1
+            cloud_path = cloud_path_list[0]
+            if not do_not_save: io.save_file(clouds, cloud_path, verbose=True)
 
     threads = []
-    for channel in channels:
+    for i, channel in enumerate(channels):
       ds: DigitalSignal = sg.digital_signals[0]
 
       if not CHANNEL_SHOULD_EXIST and channel not in ds.channels_names:
+        console.warning(f'`{channel}` not found!')
         continue
 
       # Check sg folder first to avoid conflicts
@@ -180,7 +228,7 @@ class Freud(FileManager):
       # Extract clouds for each channel
       if PARA_CHANNEL:
         t = threading.Thread(target=generate_clouds_in_channel,
-                             args=(channel,))
+                             args=(channel, False))
         threads.append(t)
         t.start()
       else:
