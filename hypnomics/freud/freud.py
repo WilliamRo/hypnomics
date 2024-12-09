@@ -159,7 +159,8 @@ class Freud(FileManager):
           for pk in pk_list:
             cloud_path, b_exist = self._check_hierarchy(
               sg.label, channel=channel, time_resolution=tr,
-              feature_name=pk, create_if_not_exist=False)
+              feature_name=pk, create_if_not_exist=True,
+              return_false_if_not_exist=True)
             cloud_path_list.append(cloud_path)
             b_exist_list.append(b_exist)
 
@@ -180,7 +181,7 @@ class Freud(FileManager):
               # (3.1.1) Get cloud path
               cloud_path, b_exist = self._check_hierarchy(
                 sg.label, channel=channel, time_resolution=tr,
-                feature_name=pk, create_if_not_exist=False)
+                feature_name=pk, create_if_not_exist=True)
 
               # (3.1.2) Save clouds
               io.save_file(clouds, cloud_path, verbose=True)
@@ -214,6 +215,7 @@ class Freud(FileManager):
             cloud_path = cloud_path_list[0]
             if not do_not_save: io.save_file(clouds, cloud_path, verbose=True)
 
+    # Run in threads
     threads = []
     for i, channel in enumerate(channels):
       ds: DigitalSignal = sg.digital_signals[0]
@@ -228,7 +230,7 @@ class Freud(FileManager):
       # Extract clouds for each channel
       if PARA_CHANNEL:
         t = threading.Thread(target=generate_clouds_in_channel,
-                             args=(channel, False))
+                             args=(channel, True))
         threads.append(t)
         t.start()
       else:
