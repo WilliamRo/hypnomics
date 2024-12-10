@@ -13,17 +13,14 @@
 # limitations under the License.
 # ==-========================================================================-==
 from collections import OrderedDict
-
-import numpy as np
-
 from hypnomics.hypnoprints.hp_extractor import STAGE_KEYS
 from pictor.xomics.misc.distribution import remove_outliers
 from roma import Nomear
 from roma import io
 
+import numpy as np
 
 
-# STAGE_KEYS = ('W', 'N1', 'N2', 'N3', 'R')
 
 class Nebula(Nomear):
   """Nebula.data_dict =
@@ -35,6 +32,7 @@ class Nebula(Nomear):
     Nebula.
   """
 
+  # STAGE_KEYS = ('W', 'N1', 'N2', 'N3', 'R')
   STAGE_KEYS = STAGE_KEYS
 
   def __init__(self, time_resolution: int, name: str = 'Nebula'):
@@ -43,6 +41,8 @@ class Nebula(Nomear):
     self.name = name
 
   # region: Properties
+
+  # region: -META
 
   @property
   def delta(self): return self.time_resolution
@@ -62,6 +62,10 @@ class Nebula(Nomear):
   @Nomear.property(local=True)
   def data_dict(self): return OrderedDict()
 
+  # endregion: -META
+
+  # region: -Statistics
+
   @Nomear.property()
   def epoch_num_dict(self) -> dict:
     # TODO: previously this property is not a Nomear.property ! BE AWARE
@@ -73,23 +77,53 @@ class Nebula(Nomear):
         od[label][sk] = len(self.data_dict[(label, ck, pk)][sk])
     return od
 
+  # endregion: -Statistics
+
+  # region: -Population
+
+  @property
+  def default_reference_stage(self): return 'N2'
+
+  @property
+  def default_reference_channel(self):
+    candidates = ('EEG C4-M1', 'C4-M1', 'EEG Pz-Oz', 'Pz-Oz')
+    for ck in candidates:
+      if ck in self.channels: return ck
+    raise ValueError(f'!! Default reference channel {candidates} not found !!')
+
+  @Nomear.property(local=False)
+  def galaxy(self) -> dict:
+    """Default label is '*'"""
+    return self.merge(save_to_self=False)
+
+  @Nomear.property(local=False)
+  def collapsed_galaxy(self) -> dict:
+    cg = OrderedDict()
+    for pk in self.probe_keys:
+      cg[pk] = []
+      for ck in self.channels:
+        for sk in ['N1', 'N2', 'N3', 'R']:
+          cg[pk].extend(self.galaxy[('*', ck, pk)][sk])
+
+    return cg
+
+  @Nomear.property(local=False)
+  def galaxy_borders(self) -> dict:
+    borders = OrderedDict()
+    pe = 1
+    for pk in self.probe_keys:
+      values = self.collapsed_galaxy[pk]
+      # Get range within percentile edge
+      borders[pk] = (np.percentile(values, pe), np.percentile(values, 100 - pe))
+    return borders
+
+  # endregion: -Population
+
   # endregion: Properties
 
   # region: Public Methods
 
-  def to_walker_results(self, x_key='FREQ-20', y_key='AMP-1') -> dict:
-    """Return old-version FPViewer display format"""
-    fps = OrderedDict()
-
-    probe_dict = OrderedDict()
-    probe_dict[x_key] = ('', [''])
-    probe_dict[y_key] = ('', [''])
-    fps['meta'] = (self.labels, self.channels, probe_dict)
-
-    for (sg_label, chn, probe_key), clouds in self.data_dict.items():
-      fps[(sg_label, chn, (probe_key, '', ''))] = clouds
-
-    return fps
+  # region: -Visualization
 
   def dual_view(self, x_key='FREQ-20', y_key='AMP-1', viewer_class=None,
                 title=None, fig_size=(10, 6), viewer_configs=None,
@@ -115,6 +149,10 @@ class Nebula(Nomear):
       for k, v in probe_1_configs.items(): viewer.plotters[0].set(k, v)
       viewer.show()
 
+  # endregion: -Visualization
+
+  # region: -Data Manipulation
+
   def set_labels(self, labels: list, check_sub_set=True):
     if check_sub_set:
       for lb in labels:
@@ -128,9 +166,9 @@ class Nebula(Nomear):
     self.put_into_pocket('probe_keys', probe_keys, local=True,
                          exclusive=False)
 
-  # endregion: Public Methods
+  # endregion: -Data Manipulation
 
-  # region: IO
+  # region: -IO
 
   @staticmethod
   def load(path: str, verbose=True) -> 'Nebula':
@@ -141,15 +179,93 @@ class Nebula(Nomear):
     if not path.endswith('.nebula'): path = f'{path}.nebula'
     io.save_file(self, path, verbose=verbose)
 
-  # endregion: IO
+  # endregion: -IO
 
-  # region: Clouds Analysis
+  # region: -Compatibility
+
+  def to_walker_results(self, x_key='FREQ-20', y_key='AMP-1') -> dict:
+    """Return old-version FPViewer display format"""
+    fps = OrderedDict()
+
+    probe_dict = OrderedDict()
+    probe_dict[x_key] = ('', [''])
+    probe_dict[y_key] = ('', [''])
+    fps['meta'] = (self.labels, self.channels, probe_dict)
+
+    for (sg_label, chn, probe_key), clouds in self.data_dict.items():
+      fps[(sg_label, chn, (probe_key, '', ''))] = clouds
+
+    return fps
+
+  # endregion: -Compatibility
+
+  # region: -Clouds Analysis
 
   def get_epoch_total(self, label, stage_keys=STAGE_KEYS, excludes=()) -> int:
     return sum([self.epoch_num_dict[label][sk]
                 for sk in stage_keys if sk not in excludes])
 
-  # endregion: Clouds Analysis
+  # endregion: -Clouds Analysis
+
+  # region: -Population
+
+  # TODO TODO:
+  # def calc_pop_
+
+  def merge(self, sg_labels: list = None, align=True,
+            ref_sk='default', ref_ck='default',
+            merged_label='*', save_to_self=False):
+    """Merge clouds of multiple subjects into a single cloud for each channel.
+
+    Args:
+      sg_labels: list, list of sg_labels.
+      align: bool, whether to align clouds by centering.
+      ref_sk: str, reference stage for centering.
+      ref_ck: str, reference channel for centering.
+      merged_label: str, label for the merged cloud.
+      save_to_self: bool, whether to save the merged cloud to self.
+    """
+    # (0) Sanity check
+    if sg_labels is None: sg_labels = self.labels
+    for lb in sg_labels: assert lb in self.labels, f"!! Label `{lb}` not found !!"
+
+    if ref_sk == 'default': ref_sk = self.default_reference_stage
+    assert ref_sk in self.STAGE_KEYS, f"!! Reference stage `{ref_sk}` not found !!"
+
+    if ref_ck == 'default': ref_ck = self.default_reference_channel
+    assert ref_ck in self.channels, f"!! Reference channel `{ref_ck}` not found !!"
+
+    # (1) Merge
+    data_dict = OrderedDict()
+    # (1.1) Traverse signal groups
+    for lb in sg_labels:
+      # (1.2) Traverse probe keys
+      for pk in self.probe_keys:
+        # (1.3) Calculate shift compensation
+        c = np.median(self.data_dict[(lb, ref_ck, pk)][ref_sk]) if align else 0.
+        # (1.4) Traverse channels
+        for ck in self.channels:
+          # (1.5) Initialize if necessary
+          if (merged_label, ck, pk) not in data_dict:
+            data_dict[(merged_label, ck, pk)] = {sk: [] for sk in STAGE_KEYS}
+          # (1.6) Merge clouds
+          for sk in self.STAGE_KEYS:
+            cloud_sk = np.array(self.data_dict[(lb, ck, pk)][sk]) - c
+            data_dict[(merged_label, ck, pk)][sk].extend(list(cloud_sk))
+
+    # (2) Return accordingly
+    if not save_to_self: return data_dict
+    self.data_dict.update(data_dict)
+
+  def get_default_ref_center(self, label, pk):
+    ck = self.default_reference_channel
+    sk = self.default_reference_stage
+    cloud = self.data_dict[(label, ck, pk)][sk]
+    return np.median(cloud)
+
+  # endregion: -Population
+
+  # endregion: Public Methods
 
   # region: Overridden Methods
 
@@ -172,16 +288,16 @@ class Nebula(Nomear):
 
   # region: Lab Methods
 
-  # region: Reference
+  # region: -Reference
 
   def get_center(self, label, chn, pk, stage_key):
     cloud = self.data_dict[(label, chn, pk)][stage_key]
     cloud = remove_outliers(cloud)
     return np.mean(cloud)
 
-  # endregion: Reference
+  # endregion: -Reference
 
-  # region: Evolution
+  # region: -Evolution
 
   def gen_evolution(self, meta_key, intervals, iqr=False) -> 'Nebula':
     """Generate evolution of this nebula by merging centered clouds.
@@ -232,7 +348,7 @@ class Nebula(Nomear):
     # (-1) Return evolution nebula
     return evo
 
-  # endregion: Evolution
+  # endregion: -Evolution
 
   # endregion: Lab Methods
 

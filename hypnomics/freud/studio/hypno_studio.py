@@ -12,8 +12,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ====-========================================================================-
-import numpy as np
-
 from hypnomics.freud.file_manager import FileManager
 from hypnomics.freud.freud import Freud
 from hypnomics.freud.nebula import Nebula
@@ -21,8 +19,10 @@ from matplotlib.gridspec import GridSpec
 from pictor.objects.signals.signal_group import SignalGroup, Annotation
 from roma import console, io
 from roma import Nomear
+from scipy import stats
 
 import matplotlib.pyplot as plt
+import numpy as np
 import os
 
 
@@ -47,11 +47,14 @@ class HypnoStudio(Nomear):
     self.neb_dir = neb_dir
 
     if not os.path.exists(work_dir): os.mkdir(work_dir)
-    console.show_status(f'HypnoStudio created, '
-                        f'work directory set to `{os.path.abspath(work_dir)}`')
+    console.show_status(f'work directory set to `{os.path.abspath(work_dir)}`',
+                        prompt='[HypnoStudio]')
 
     # Initialize a file manager
     self.file_manager = FileManager(work_dir=neb_dir)
+
+    # Set kwargs
+    self.kwargs = kwargs
 
   # region: Properties
 
@@ -77,18 +80,8 @@ class HypnoStudio(Nomear):
     # (2.1) Set figure layout
     n_channels = len(channels)
     n_cols = kwargs.get('n_cols', min(3, n_channels))
-    n_rows = n_channels // n_cols
-
     hg_ratio = kwargs.get('hypnogram_ratio', 0.2)
-    height_ratios = [(1 - hg_ratio) / n_rows] * n_rows + [hg_ratio]
-    gs = GridSpec(n_rows + 1, n_cols, figure=fig, height_ratios=height_ratios)
-    axes = []
-    for row in range(n_rows):
-      for col in range(n_cols):
-        axes.append(fig.add_subplot(gs[row, col]))
-
-    # (2.2) Create a new subplot that spans the entire last row
-    ax_hypnogram = fig.add_subplot(gs[n_rows, :])
+    axes, ax_hypnogram = self.make_layout(fig, n_channels, n_cols, hg_ratio)
 
     # (3) Plot hypnofingerprints
     # (3.1) Generate nebula
@@ -99,18 +92,18 @@ class HypnoStudio(Nomear):
                                probe_keys=probe_keys)
 
     # (3.2) Plot distribution
-    self._plot_distribution(axes, nebula, channels, probe_keys)
+    self._plot_distribution(axes, nebula, psg_label, channels, probe_keys,
+                            **self.kwargs)
 
     # (4) Plot hypnogram
-    self._plot_hypnogram(ax_hypnogram, sg, line_width=10)
+    self._plot_hypnogram(ax_hypnogram, sg)
 
     # photo_filename = self.get_photo_filename(psg_label, pk_1, pk_2)
     # (9) ...
     # (9.1) Set title
     properties = kwargs.get('properties', {})
     prop_str = ', '.join([f'{k}: {v}' for k, v in properties.items()])
-    pk_str = 'x'.join(probe_keys)
-    fig.suptitle(f'{psg_label}({prop_str}) | {pk_str}')
+    fig.suptitle(f'{psg_label} ({prop_str})')
 
     # (9.2) Finalize
     fig.tight_layout()
@@ -132,37 +125,112 @@ class HypnoStudio(Nomear):
   def _plot_joint_distribution(self, ax: plt.Axes):
     pass
 
-  def _plot_distribution(self, axes: list[plt.Axes], nebula: Nebula, channels,
-                         probe_keys):
+  @classmethod
+  def make_layout(cls, fig: plt.Figure, n_channels, n_cols, hg_ratio=0.):
+    n_rows = n_channels // n_cols
+
+    # Calculate hypnogram ratio
+    height_ratios = [(1 - hg_ratio) / n_rows] * n_rows + [hg_ratio]
+    gs = GridSpec(n_rows + 1, n_cols, figure=fig, height_ratios=height_ratios)
+    axes = []
+    for row in range(n_rows):
+      for col in range(n_cols):
+        axes.append(fig.add_subplot(gs[row, col]))
+
+    if hg_ratio > 0:
+      # Create a new subplot that spans the entire last row
+      ax_hypnogram = fig.add_subplot(gs[n_rows, :])
+      return axes, ax_hypnogram
+
+    return axes
+
+  @classmethod
+  def _plot_distribution(cls, axes: list[plt.Axes], nebula: Nebula, psg_label,
+                         channels, probe_keys, **kwargs):
     # (0) Sanity check
     assert len(axes) == len(channels)
-    assert len(nebula.labels) == 1
 
     # (1) Plot (joint-)distribution for each channel
+    # (1.1) Get global range
+    if kwargs.get('align_to_galaxy'):
+      ref_centers = [nebula.get_default_ref_center(psg_label, pk)
+                     for pk in probe_keys]
+      ranges = [[v + rc for v in nebula.galaxy_borders[pk]]
+                for pk, rc in zip(probe_keys, ref_centers)]
+    else:
+      ranges = [cls._get_range(nebula, psg_label, channels, pk)
+                for pk in probe_keys]
+
+    # Apply padding
+    pad = kwargs.get('pad', 0.2)
+    ranges = [(v_min - pad * (v_max - v_min), v_max + pad * (v_max - v_min))
+              for v_min, v_max in ranges]
+
     for ax, ck in zip(axes, channels):
-      # (1.1) Get data
-      clouds = [nebula.data_dict[(nebula.labels[0], ck, pk)] for pk in probe_keys]
+      # (1.2) Get data
+      clouds = [nebula.data_dict[(psg_label, ck, pk)] for pk in probe_keys]
 
-      # (1.2) Plot clouds
-      if len(clouds) == 2: self._plot_kde_2D(ax, ck, *clouds)
-      else: self._plot_kde_1D(ax, clouds[0])
+      # (1.3) Plot clouds
+      if len(clouds) == 2:
+        cls._plot_kde_2D(ax, ck, clouds[0], clouds[1], ranges[0], ranges[1],
+                          *probe_keys, **kwargs)
+      else:
+        cls._plot_kde_1D(ax, clouds[0], ranges[0])
 
-  def _plot_kde_2D(self, ax: plt.Axes, channel, cloud_1: dict, cloud_2: dict):
+  @classmethod
+  def _plot_kde_2D(cls, ax: plt.Axes, channel, cloud_1: dict, cloud_2: dict,
+                   xrange, yrange, pk1, pk2, **kwargs):
     # (1) Plot KDE for each stage
-    for sk, color in self.STAGE_COLORS.items():
-      if sk not in cloud_1: continue
-      x1, x2 = cloud_1[sk], cloud_2[sk]
-      ax.scatter(x1, x2, color=color, alpha=0.2)
+    xmin, xmax = xrange
+    ymin, ymax = yrange
+    for sk, color in cls.STAGE_COLORS.items():
+      if sk not in cloud_1 or len(cloud_1[sk]) < 5: continue
+      x, y = cloud_1[sk], cloud_2[sk]
+
+      # (1.*) Plot scatter
+      if kwargs.get('plot_scatter', False):
+        ax.scatter(x, y, color=color, alpha=0.2)
+        continue
+
+      # (1.1) Plot KDE contour
+      # TODO: remove outliers?
+      kernel = stats.gaussian_kde(np.vstack([x, y]))
+      X, Y = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
+      positions = np.vstack([X.ravel(), Y.ravel()])
+      Z = np.reshape(kernel(positions).T, X.shape)
+
+      # (1.1.1) Determine levels
+      levels = np.linspace(Z.min(), Z.max(), 8)[1:]
+
+      # (1.1.2) Make contour for wake stage transparent
+      alpha = 0.2 if sk == 'W' else 1.0
+      ax.contour(X, Y, Z, colors=color, levels=levels, alpha=alpha)
 
     # (2) Set axes styles
     ax.set_xticks([]), ax.set_yticks([])
+    ax.set_xlabel(pk1), ax.set_ylabel(pk2)
     if 'EEG' in channel: channel = channel.split(' ')[1]
     ax.set_title(channel)
+    ax.set_xlim(xmin, xmax), ax.set_ylim(ymin, ymax)
 
   def _plot_kde_1D(self, ax: plt.Axes, cloud: dict):
     pass
 
-  def _plot_hypnogram(self, ax: plt.Axes, sg: SignalGroup, line_width=20):
+  @classmethod
+  def _get_range(cls, nebula: Nebula, lb, channels: list, pk, pad=0.2):
+    values = []
+    for ck in channels:
+      cloud = nebula.data_dict[(lb, ck, pk)]
+      non_wake_values = [cloud[sk] for sk in ('N1', 'N2', 'N3', 'R')]
+      values.extend(np.concatenate(non_wake_values))
+
+    # Get range within percentile edge
+    pe = 1
+    v_min, v_max = np.percentile(values, pe), np.percentile(values, 100 - pe)
+    v_range = v_max - v_min
+    return v_min - pad * v_range, v_max + pad * v_range
+
+  def _plot_hypnogram(self, ax: plt.Axes, sg: SignalGroup):
     # (1) Extract ticks and stages from annotation
     annotation: Annotation = sg.annotations['stage Ground-Truth']
     ticks, stages = annotation.curve
@@ -170,10 +238,10 @@ class HypnoStudio(Nomear):
 
     # (2) Plot hypnogram
     # (2.1) Plot background
-    colors = ['forestgreen', 'gold', 'orange', 'royalblue', 'lightcoral']
-    for i, c in enumerate(colors):
-      ax.plot([ticks[0], ticks[-1]], [i, i], color=c,
-              linewidth=line_width, alpha=0.2)
+    for i, sk in enumerate(('W', 'N1', 'N2', 'N3', 'R')):
+      color = self.STAGE_COLORS[sk]
+      r = 0.45
+      ax.axhspan(i - r, i + r, color=color, alpha=0.2)
 
     # (2.2) Plot stages
     N = len(ticks)
