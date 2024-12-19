@@ -56,26 +56,8 @@ class Freud(FileManager):
 
     # Create sg_generator, this is for more accuracy progress bar
     def sg_filter(_path=None, _sg_label=None):
-      for ck in channels:
-        for tr in time_resolutions:
-          for pk, probe in extractor_dict.items():
-            if _sg_label is None:
-              assert _path is not None and _path[-1] != '/'
-              sg_label = os.path.basename(_path)
-              sg_label = sg_label.split('(')[0]
-            else: sg_label = _sg_label
-
-            if isinstance(probe, ProbeGroup): pk_list = probe.probe_keys
-            else: pk_list = [pk]
-
-            b_exist_list = [
-              self._check_hierarchy(
-                sg_label, channel=ck, time_resolution=tr, feature_name=pk,
-                create_if_not_exist=False, return_false_if_not_exist=True)[1]
-            for pk in pk_list]
-
-            if not all(b_exist_list): return True
-      return False
+      return not self._check_cloud(_path, _sg_label, channels, time_resolutions,
+                                   extractor_dict)
 
     sg_file_list = finder.walk(sg_path, pattern=pattern)
     n_all_files = len(sg_file_list)

@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ====-======================================================================-==
+from hypnomics.hypnoprints.probes.probe_group import ProbeGroup
 from hypnomics.freud.nebula import Nebula
 from pictor.objects.signals.signal_group import SignalGroup
 from roma import console
@@ -89,6 +90,32 @@ class FileManager(Nomear):
         else: return tr_path
       else: return channel_path
     else: return sg_path
+
+  def _check_cloud(self, sg_path, psg_label, channels, time_resolutions,
+                   extractor_dict):
+    for ck in channels:
+      for tr in time_resolutions:
+        for pk, probe in extractor_dict.items():
+          if psg_label is None:
+            assert sg_path is not None and sg_path[-1] != '/'
+            sg_label = os.path.basename(sg_path)
+            sg_label = sg_label.split('(')[0]
+          else:
+            sg_label = psg_label
+
+          if isinstance(probe, ProbeGroup):
+            pk_list = probe.probe_keys
+          else:
+            pk_list = [pk]
+
+          b_exist_list = [
+            self._check_hierarchy(
+              sg_label, channel=ck, time_resolution=tr, feature_name=pk,
+              create_if_not_exist=False, return_false_if_not_exist=True)[1]
+            for pk in pk_list]
+
+          if not all(b_exist_list): return False
+    return True
 
   def _get_signal_group_generator(
       self, sg_path: str, pattern: str, progress_bar=False,

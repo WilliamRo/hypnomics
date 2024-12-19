@@ -212,14 +212,14 @@ class Nebula(Nomear):
   # TODO TODO:
   # def calc_pop_
 
-  def merge(self, sg_labels: list = None, align=True,
+  def merge(self, sg_labels: list = None, align='channel_stage',
             ref_sk='default', ref_ck='default',
             merged_label='*', save_to_self=False):
     """Merge clouds of multiple subjects into a single cloud for each channel.
 
     Args:
       sg_labels: list, list of sg_labels.
-      align: bool, whether to align clouds by centering.
+      align: str, aligning method, should be in ('none', 'stage', 'channel_stage')
       ref_sk: str, reference stage for centering.
       ref_ck: str, reference channel for centering.
       merged_label: str, label for the merged cloud.
@@ -235,20 +235,27 @@ class Nebula(Nomear):
     if ref_ck == 'default': ref_ck = self.default_reference_channel
     assert ref_ck in self.channels, f"!! Reference channel `{ref_ck}` not found !!"
 
+    assert align in ('none', 'stage', 'channel_stage'), "!! Invalid align method !!"
+
     # (1) Merge
     data_dict = OrderedDict()
+    c = 0.
     # (1.1) Traverse signal groups
     for lb in sg_labels:
       # (1.2) Traverse probe keys
       for pk in self.probe_keys:
-        # (1.3) Calculate shift compensation
-        c = np.median(self.data_dict[(lb, ref_ck, pk)][ref_sk]) if align else 0.
+        # (1.3) Calculate shift compensation if align is 'channel_stage'
+        if align == 'channel_stage':
+          c = np.median(self.data_dict[(lb, ref_ck, pk)][ref_sk])
         # (1.4) Traverse channels
         for ck in self.channels:
           # (1.5) Initialize if necessary
           if (merged_label, ck, pk) not in data_dict:
             data_dict[(merged_label, ck, pk)] = {sk: [] for sk in STAGE_KEYS}
-          # (1.6) Merge clouds
+          # (1.6) Calculate shift compensation if align is 'stage'
+          if align == 'stage':
+            c = np.median(self.data_dict[(lb, ck, pk)][ref_sk])
+          # (1.7) Merge clouds
           for sk in self.STAGE_KEYS:
             cloud_sk = np.array(self.data_dict[(lb, ck, pk)][sk]) - c
             data_dict[(merged_label, ck, pk)][sk].extend(list(cloud_sk))

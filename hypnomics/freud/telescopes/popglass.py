@@ -16,6 +16,7 @@ from hypnomics.freud.nebula import Nebula
 from hypnomics.freud.studio.hypno_studio import HypnoStudio
 from pictor import Pictor
 from pictor.plotters.plotter_base import Plotter
+from roma import console
 
 import matplotlib.pyplot as plt
 
@@ -39,6 +40,15 @@ class PopGlass(Pictor):
     self.kwargs = kwargs
 
 
+  def save(self):
+    """Save nebula to file"""
+    import tkinter as tk
+
+    file_path = tk.filedialog.asksaveasfilename(
+      title='Save as', filetypes=[('NEBULA files', '*.nebula')])
+    if file_path is not None: self.nebula.save(file_path)
+
+
 
 class PopStudio(Plotter):
 
@@ -48,6 +58,12 @@ class PopStudio(Plotter):
 
     self.new_settable_attr('pad', 0.2, float,
                            'Padding of galaxy border')
+    self.new_settable_attr('bottom_ratio', 0.0, float,
+                           'Height ratio of bottom panel')
+    self.new_settable_attr('bottom_plotter', None, str,
+                           'Function to plot bottom panel')
+    self.new_settable_attr('outlier_coef', 0, float,
+                           '`alpha` coefficient for removing outliers')
 
   @property
   def nebula(self) -> Nebula: return self.pictor.nebula
@@ -55,15 +71,72 @@ class PopStudio(Plotter):
   @property
   def probe_keys(self): return self.pictor.x_key, self.pictor.y_key
 
+  # region: Private Methods
+
+  def _get_buffer_key(self, psg_label):
+    pad = self.get('pad')
+    return f'{psg_label}_{"_".join(self.probe_keys)}_pad{pad}_buffer'
+
+  # endregion: Private Methods
+
+  # region: Public Methods
+
+  def preload(self, overwrite:int=0):
+    """Preload all buffer_dict"""
+    console.show_status('Preload all fingerprints ...')
+    N = len(self.nebula.labels)
+    n_channels = len(self.nebula.channels)
+    with self.pictor.busy('Preloading fingerprints ...'):
+      for i, psg_label in enumerate(self.nebula.labels):
+        console.print_progress(i, N)
+        _key = self._get_buffer_key(psg_label)
+
+        # Continue if already exist
+        if self.nebula.in_pocket(_key) and not overwrite: continue
+
+        _bd = {}
+        # Use HypnoStudio to preload
+        HypnoStudio.plot_distribution(
+          [None] * n_channels, self.nebula, psg_label,
+          self.nebula.channels, self.probe_keys, pad=self.get('pad'),
+          align_to_galaxy=True, buffer=_bd)
+
+        self.nebula.put_into_pocket(_key, _bd, local=True, exclusive=False)
+
+    console.show_status(f'Preloaded {N} groups of fingerprints.')
+
   def plot(self, x, fig: plt.Figure):
     # Create layout
     n_channels = len(self.nebula.channels)
     n_cols = min(3, n_channels)
 
-    axes = HypnoStudio.make_layout(fig, n_channels, n_cols)
-    HypnoStudio._plot_distribution(
+    br = self.get('bottom_ratio')
+    bottom_panel = None
+    axes = HypnoStudio.make_layout(fig, n_channels, n_cols, hg_ratio=br)
+    if br > 0: axes, bottom_panel = axes
+
+    # ~ Get buffer
+    buffer_key = self._get_buffer_key(x)
+    buffer_dict = self.nebula.get_from_pocket(buffer_key, {})
+
+    # Plot joint-distribution
+    HypnoStudio.plot_distribution(
       axes, self.nebula, x, self.nebula.channels, self.probe_keys,
-      pad=self.get('pad'), align_to_galaxy=True)
+      pad=self.get('pad'), align_to_galaxy=True, buffer=buffer_dict,
+      outlier_coef=self.get('outlier_coef'))
 
-    fig.suptitle(f'{x}')
+    # ~ Put buffer into nebula's pocket if not exist
+    if not self.nebula.in_pocket(buffer_key):
+      self.nebula.put_into_pocket(buffer_key, buffer_dict, local=True)
 
+    # ~ Plot at bottom panel
+    b_plotter = self.get('bottom_plotter')
+    if callable(b_plotter): b_plotter(bottom_panel, x)
+
+    # Display super title
+    properties = self.nebula.meta.get(x, {})
+    prop_str = ', '.join([f'{k}: {v}' for k, v in properties.items()])
+    if prop_str: prop_str = f' | {prop_str}'
+    fig.suptitle(f'{x}{prop_str}')
+
+  # endregion: Public Methods

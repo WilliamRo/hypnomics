@@ -17,6 +17,7 @@ from hypnomics.freud.freud import Freud
 from hypnomics.freud.nebula import Nebula
 from matplotlib.gridspec import GridSpec
 from pictor.objects.signals.signal_group import SignalGroup, Annotation
+from pictor.xomics.misc.distribution import remove_outliers_for_list
 from roma import console, io
 from roma import Nomear
 from scipy import stats
@@ -92,8 +93,8 @@ class HypnoStudio(Nomear):
                                probe_keys=probe_keys)
 
     # (3.2) Plot distribution
-    self._plot_distribution(axes, nebula, psg_label, channels, probe_keys,
-                            **self.kwargs)
+    self.plot_distribution(axes, nebula, psg_label, channels, probe_keys,
+                           **self.kwargs)
 
     # (4) Plot hypnogram
     self._plot_hypnogram(ax_hypnogram, sg)
@@ -145,14 +146,14 @@ class HypnoStudio(Nomear):
     return axes
 
   @classmethod
-  def _plot_distribution(cls, axes: list[plt.Axes], nebula: Nebula, psg_label,
-                         channels, probe_keys, **kwargs):
+  def plot_distribution(cls, axes: list[plt.Axes], nebula: Nebula, psg_label,
+                        channels, probe_keys, **kwargs):
     # (0) Sanity check
     assert len(axes) == len(channels)
 
     # (1) Plot (joint-)distribution for each channel
     # (1.1) Get global range
-    if kwargs.get('align_to_galaxy'):
+    if kwargs.get('align_to_galaxy', True):
       ref_centers = [nebula.get_default_ref_center(psg_label, pk)
                      for pk in probe_keys]
       ranges = [[v + rc for v in nebula.galaxy_borders[pk]]
@@ -172,20 +173,30 @@ class HypnoStudio(Nomear):
 
       # (1.3) Plot clouds
       if len(clouds) == 2:
-        cls._plot_kde_2D(ax, ck, clouds[0], clouds[1], ranges[0], ranges[1],
-                          *probe_keys, **kwargs)
+        cls._plot_kde_2D(ax, ck, clouds[0], clouds[1],
+                         ranges[0], ranges[1], *probe_keys, **kwargs)
       else:
         cls._plot_kde_1D(ax, clouds[0], ranges[0])
+
+    # ~ return buffer dict
 
   @classmethod
   def _plot_kde_2D(cls, ax: plt.Axes, channel, cloud_1: dict, cloud_2: dict,
                    xrange, yrange, pk1, pk2, **kwargs):
+    # ~ Get buffer dict
+    buffer_dict = kwargs.get('buffer', {})
+
     # (1) Plot KDE for each stage
     xmin, xmax = xrange
     ymin, ymax = yrange
     for sk, color in cls.STAGE_COLORS.items():
       if sk not in cloud_1 or len(cloud_1[sk]) < 5: continue
       x, y = cloud_1[sk], cloud_2[sk]
+
+      # ~ Remove outliers if required
+      alpha = kwargs.get('outlier_coef', 0)
+      if alpha > 0:
+        x, y = remove_outliers_for_list(x, y, alpha=alpha)
 
       # (1.*) Plot scatter
       if kwargs.get('plot_scatter', False):
@@ -194,18 +205,27 @@ class HypnoStudio(Nomear):
 
       # (1.1) Plot KDE contour
       # TODO: remove outliers?
-      kernel = stats.gaussian_kde(np.vstack([x, y]))
       X, Y = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
       positions = np.vstack([X.ravel(), Y.ravel()])
-      Z = np.reshape(kernel(positions).T, X.shape)
+
+      # ~ Try to get Z from buffer dict
+      _key = (channel, sk)
+      if _key not in buffer_dict:
+        kernel = stats.gaussian_kde(np.vstack([x, y]))
+        Z = np.reshape(kernel(positions).T, X.shape)
+        buffer_dict[_key] = Z
+      else:
+        Z = buffer_dict[_key]
 
       # (1.1.1) Determine levels
       levels = np.linspace(Z.min(), Z.max(), 8)[1:]
 
       # (1.1.2) Make contour for wake stage transparent
       alpha = 0.2 if sk == 'W' else 1.0
-      ax.contour(X, Y, Z, colors=color, levels=levels, alpha=alpha)
+      # ~ ax can be None (for preloading)
+      if ax: ax.contour(X, Y, Z, colors=color, levels=levels, alpha=alpha)
 
+    if ax is None: return
     # (2) Set axes styles
     ax.set_xticks([]), ax.set_yticks([])
     ax.set_xlabel(pk1), ax.set_ylabel(pk2)
