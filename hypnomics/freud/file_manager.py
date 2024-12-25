@@ -147,7 +147,7 @@ class FileManager(Nomear):
   # region: Public Methods
 
   def load_nebula(self, sg_labels: list, channels: list, time_resolution: int,
-                  probe_keys: list, name='Nebula') -> Nebula:
+                  probe_keys: list, name='Nebula', verbose=False) -> Nebula:
     """Load a Nebula object from the given signal group labels, channels,
     time resolution, and probe keys.
 
@@ -162,7 +162,9 @@ class FileManager(Nomear):
     """
     nebula = Nebula(time_resolution, name=name)
 
-    for sg_label in sg_labels:
+    if verbose: console.show_status('Loading nebula ...')
+    for i, sg_label in enumerate(sg_labels):
+      if verbose and i % 10 == 0: console.print_progress(i, len(sg_labels))
       nebula.labels.append(sg_label)
 
       for channel in channels:
@@ -190,6 +192,9 @@ class FileManager(Nomear):
           assert b_exist, f'`{clouds_path}` not found.'
           clouds = io.load_file(clouds_path)
           nebula.data_dict[(sg_label, channel, probe_key)] = clouds
+
+    if verbose:
+      console.show_status(f'Loaded nebula from {len(sg_labels)} PSG records.')
 
     return nebula
 

@@ -262,8 +262,12 @@ class Freud(FileManager):
       interval_stage = list(zip(anno.intervals, stages))
 
       # Remove wake stage from both end
-      while interval_stage[0][1] == 0: interval_stage.pop(0)
-      while interval_stage[-1][1] == 0: interval_stage.pop(-1)
+      try:
+        while interval_stage[0][1] == 0: interval_stage.pop(0)
+        while interval_stage[-1][1] == 0: interval_stage.pop(-1)
+      except:
+        console.warning(f'!! No valid stage found in {sg.label} !!')
+        continue
 
       x_dict = OrderedDict()
 

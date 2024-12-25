@@ -50,6 +50,7 @@ class HypnoStudio(Nomear):
     if not os.path.exists(work_dir): os.mkdir(work_dir)
     console.show_status(f'work directory set to `{os.path.abspath(work_dir)}`',
                         prompt='[HypnoStudio]')
+    self.work_dir = work_dir
 
     # Initialize a file manager
     self.file_manager = FileManager(work_dir=neb_dir)
@@ -93,8 +94,11 @@ class HypnoStudio(Nomear):
                                probe_keys=probe_keys)
 
     # (3.2) Plot distribution
-    self.plot_distribution(axes, nebula, psg_label, channels, probe_keys,
-                           **self.kwargs)
+    try:
+      self.plot_distribution(axes, nebula, psg_label, channels, probe_keys,
+                             **self.kwargs)
+    except:
+      pass
 
     # (4) Plot hypnogram
     self._plot_hypnogram(ax_hypnogram, sg)
@@ -110,6 +114,12 @@ class HypnoStudio(Nomear):
     fig.tight_layout()
 
     if show_figure: plt.show()
+
+    if kwargs.get('save', False):
+      fn = f'{psg_label}_{time_resolution}s_{pk_1}_{pk_2}_c{len(channels)}.png'
+      save_path = os.path.join(self.work_dir, fn)
+      fig.savefig(save_path)
+
     return fig
 
   def get_photo_filename(self, psg_label, pk_1, pk_2=None):
