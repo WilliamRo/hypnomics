@@ -126,7 +126,8 @@ class FileManager(Nomear):
       _sg_file_list = finder.walk(sg_path, pattern=pattern)
     else:
       _sg_file_list = sg_file_list
-      console.show_status(f'Using provided sg_file_list (N={len(sg_file_list)}) ...')
+      console.show_status(f'Using provided sg_file_list (N={len(sg_file_list)})'
+                          f' for creating sg_generator ...')
 
     # ...
     N = kwargs.get('max_n_sg', None)

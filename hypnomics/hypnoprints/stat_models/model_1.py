@@ -47,14 +47,17 @@ class HypnoModel1(HypnoModelBase):
     return self.get_from_pocket(key, initializer=lambda: stats.gaussian_kde(x))
 
 
-  def calc_upsilon(self, data_dict_1, data_dict_2, N_1=None, N_2=None):
+  def calc_upsilon(self, data_dict_1, data_dict_2, N_1=None, N_2=None,
+                   cond_keys=None):
+    assert cond_keys is not None
+
     # Calculate N_1, N_2 if not provided
     if N_1 is None or N_2 is None:
-      N_1, N_2 = [sum([len(d[k]) for k in self.cond_keys])
+      N_1, N_2 = [sum([len(d[k]) for k in cond_keys])
                   for d in (data_dict_1, data_dict_2)]
 
     c_pool = []
-    for key in self.cond_keys:
+    for key in cond_keys:
       if key not in data_dict_1 or key not in data_dict_2: continue
 
       x_1, x_2 = data_dict_1[key], data_dict_2[key]
@@ -71,7 +74,8 @@ class HypnoModel1(HypnoModelBase):
 
 
   def calc_distance(self, data_dict_1: dict, data_dict_2: dict,
-                    data_1_key=None, data_2_key=None, conditional=True):
+                    data_1_key=None, data_2_key=None, conditional=True,
+                    shift_compensation=True):
     """data_dict =
       {'W': [...], 'N1': [...], 'N2': [...], 'N3': [...], 'R': [...]} """
     cond_keys = self.cond_keys
@@ -87,7 +91,11 @@ class HypnoModel1(HypnoModelBase):
                 for d in (data_dict_1, data_dict_2)]
 
     # Estimate constant c
-    c = self.calc_upsilon(data_dict_1, data_dict_2, N_1, N_2)
+    if shift_compensation:
+      c = self.calc_upsilon(data_dict_1, data_dict_2, N_1, N_2,
+                            cond_keys=cond_keys)
+    else:
+      c = 0.0
 
     # Calculate distances for each condition (sleep stage)
     distances = []

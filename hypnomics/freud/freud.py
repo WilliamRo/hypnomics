@@ -46,7 +46,7 @@ class Freud(FileManager):
 
   def generate_clouds(self, sg_path: str, pattern: str, channels: list,
                       time_resolutions: list, extractor_dict: dict=None,
-                      overwrite=False, **kwargs):
+                      overwrite=False, sg_file_list=None, **kwargs):
     """Generate clouds from signal group and save in a hierarchy structure."""
     # (0) Get configurations
     CHANNEL_SHOULD_EXIST = kwargs.get('channel_should_exist', True)
@@ -59,39 +59,18 @@ class Freud(FileManager):
       return not self._check_cloud(_path, _sg_label, channels, time_resolutions,
                                    extractor_dict)
 
-    sg_file_list = finder.walk(sg_path, pattern=pattern)
+    if sg_file_list is None:
+      sg_file_list = finder.walk(sg_path, pattern=pattern)
+    else:
+      console.show_status(f'Before filtering: using provided sg_file_list (N={len(sg_file_list)}).')
     n_all_files = len(sg_file_list)
+
     if not overwrite:
       sg_file_list = [path for path in sg_file_list if sg_filter(path)]
 
     # Return sg_file_list if required
     if kwargs.get('return_sg_file_list', False):
       return sg_file_list, n_all_files
-
-    # Split sg_file_list
-    # sg_sub_lists = [sg_file_list[i::SG_PARA_N] for i in range(SG_PARA_N)]
-    #
-    # def thread_func(_sg_sub_list):
-    #   sg_generator = self._get_signal_group_generator(
-    #     sg_path, pattern=pattern, progress_bar=True,
-    #     sg_file_list=_sg_sub_list, **kwargs)
-    #
-    #   for sg in sg_generator:
-    #     self._generate_clouds_in_sg(
-    #       sg=sg, channels=channels, time_resolutions=time_resolutions,
-    #       extractor_dict=extractor_dict, overwrite=overwrite,
-    #       SKIP_INVALID=SKIP_INVALID, CHANNEL_SHOULD_EXIST=CHANNEL_SHOULD_EXIST,
-    #       PARA_CHANNEL=PARA_CHANNEL)
-    #
-    # # Run each thread
-    # threads = []
-    # for sg_sub_list in sg_sub_lists:
-    #   t = threading.Thread(target=thread_func, args=(sg_sub_list,))
-    #   threads.append(t)
-    #   t.start()
-    #
-    # # Wait for all threads to finish
-    # for t in threads: t.join()
 
     sg_generator = self._get_signal_group_generator(
       sg_path, pattern=pattern, progress_bar=True,

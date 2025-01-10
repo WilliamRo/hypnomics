@@ -24,7 +24,9 @@ import numpy as np
 
 _BUFFER = {}  # Don't use, for compatibility only
 MT_ADAPTIVE = True
-WEL_FREQ_RESOLUTION = 0.5
+
+# Be consistent with the default `bandwidth` in multitaper method
+WEL_FREQ_RESOLUTION = 0.125
 
 
 def estimate_power(s: np.ndarray, fs: float, fmin=0.5, fmax=30,
