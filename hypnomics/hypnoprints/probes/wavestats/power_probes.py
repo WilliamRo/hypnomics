@@ -69,6 +69,7 @@ def estimate_power(s: np.ndarray, fs: float, fmin=0.5, fmax=30,
   freq_res = freqs[1] - freqs[0]
 
   # (2.0) Calculate all band and return a dict
+  band = band.lower()
   if band == '*':
     power_dict = {}
     for k, (low, high) in band_dict.items():
@@ -76,7 +77,7 @@ def estimate_power(s: np.ndarray, fs: float, fmin=0.5, fmax=30,
     return power_dict
 
   # (2.1) Calculate band power
-  assert band in band_dict
+  assert band in band_dict, f'Unknown band: `{band}`'
   low, high = band_dict[band]
   band_power = simps(psd[(freqs > low) & (freqs <= high)], dx=freq_res)
   if band_ref is None: return band_power
