@@ -201,7 +201,8 @@ class Freud(FileManager):
     for t in threads: t.join()
 
 
-  def generate_macro_features(self, sg_path: str, pattern: str,
+  def generate_macro_features(self, sg_path: str = None, pattern: str = None,
+                              sg_file_list=None,
                               config: str = 'alpha', overwrite=False, **kwargs):
     """Generate macro features from signal group and save in a hierarchy
     structure.
@@ -225,13 +226,14 @@ class Freud(FileManager):
 
     # Create a sg_generator
     sg_generator = self._get_signal_group_generator(
-      sg_path, pattern=pattern, progress_bar=True, **kwargs)
+      sg_path, pattern=pattern, sg_file_list=sg_file_list,
+      progress_bar=True, **kwargs)
 
     # Extract macro features for each sg file
     for sg in sg_generator:
       # Check path
-      sg_path = self._check_hierarchy(sg.label, create_if_not_exist=True)
-      macro_path = os.path.join(sg_path, f'macro_{config}.od')
+      cloud_path = self._check_hierarchy(sg.label, create_if_not_exist=True)
+      macro_path = os.path.join(cloud_path, f'macro_{config}.od')
       if os.path.exists(macro_path) and not overwrite: continue
 
       # Calculate macro features
