@@ -15,7 +15,12 @@
 from collections import OrderedDict
 from hypnomics.hypnoprints.probes.probe_group import ProbeGroup
 from mne.time_frequency import psd_array_multitaper
-from scipy.integrate import simps
+
+try:
+  from scipy.integrate import simps
+except:
+  from scipy.integrate import simpson as simps
+
 from scipy.signal import welch, periodogram
 
 import numpy as np
