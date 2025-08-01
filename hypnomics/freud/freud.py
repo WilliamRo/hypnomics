@@ -239,7 +239,8 @@ class Freud(FileManager):
       # Calculate macro features
       anno: Annotation = sg.annotations[DEFAULT_STAGE_KEY]
       map_dict = get_stage_map_dict(sg, DEFAULT_STAGE_KEY)
-      stages = [map_dict[a] for a in anno.annotations]
+      # stages = [map_dict[a] for a in anno.annotations]
+      stages = [map_dict.get(a, None) for a in anno.annotations]
       interval_stage = list(zip(anno.intervals, stages))
 
       # Remove wake stage from both end
