@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ===-===================================================================-======
+from collections import OrderedDict
 from hypnomics.freud.nebula import Nebula
 from hypnomics.freud.studio.hypno_studio import HypnoStudio
 from pictor import Pictor
@@ -25,7 +26,7 @@ import matplotlib.pyplot as plt
 class PopGlass(Pictor):
 
   def __init__(self, nebula: Nebula, x_key: str, y_key: str,
-               title='PopGlass', figure_size=(10, 6), **kwargs):
+               title='PopGlass', figure_size=(10, 6), meta_keys=(), **kwargs):
     # Call parent's constructor
     super().__init__(title, figure_size)
 
@@ -35,6 +36,8 @@ class PopGlass(Pictor):
 
     self.objects = self.nebula.labels
     self.add_plotter(PopStudio(self))
+
+    self.meta_keys = meta_keys
 
     # Set kwargs
     self.kwargs = kwargs
@@ -134,7 +137,13 @@ class PopStudio(Plotter):
     if callable(b_plotter): b_plotter(bottom_panel, x)
 
     # Display super title
-    properties = self.nebula.meta.get(x, {})
+    # properties = self.nebula.meta.get(x, {})
+
+    meta: dict = self.nebula.meta.get(x, {})
+    properties = OrderedDict(
+      (mk, meta[mk]) for mk in self.pictor.meta_keys
+    )
+
     prop_str = ', '.join([f'{k}: {v}' for k, v in properties.items()])
     if prop_str: prop_str = f' | {prop_str}'
     fig.suptitle(f'{x}{prop_str}')

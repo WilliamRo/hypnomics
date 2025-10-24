@@ -113,6 +113,8 @@ class Nebula(Nomear):
     pe = 1
     for pk in self.probe_keys:
       values = self.collapsed_galaxy[pk]
+      # Remove NaNs from values
+      values = [v for v in values if not np.isnan(v)]
       # Get range within percentile edge
       borders[pk] = (np.percentile(values, pe), np.percentile(values, 100 - pe))
     return borders

@@ -70,7 +70,7 @@ class HypnoStudio(Nomear):
     """Take a photo of a given signal group file."""
     # (1) Load files, get psg_label
     assert os.path.exists(sg_path) and os.path.exists(neb_path)
-    sg: SignalGroup = io.load_file(sg_path, verbose=True)
+    sg: SignalGroup = io.load_file(sg_path, verbose=False)
     psg_label = sg.label
 
     probe_keys = [pk_1]
@@ -119,6 +119,8 @@ class HypnoStudio(Nomear):
       fn = f'{psg_label}_{time_resolution}s_{pk_1}_{pk_2}_c{len(channels)}.png'
       save_path = os.path.join(self.work_dir, fn)
       fig.savefig(save_path)
+
+    if kwargs.get('auto_close', False): plt.close()
 
     return fig
 
@@ -260,7 +262,8 @@ class HypnoStudio(Nomear):
     v_range = v_max - v_min
     return v_min - pad * v_range, v_max + pad * v_range
 
-  def _plot_hypnogram(self, ax: plt.Axes, sg: SignalGroup):
+  @classmethod
+  def _plot_hypnogram(cls, ax: plt.Axes, sg: SignalGroup):
     # (1) Extract ticks and stages from annotation
     annotation: Annotation = sg.annotations['stage Ground-Truth']
     ticks, stages = annotation.curve
@@ -269,7 +272,7 @@ class HypnoStudio(Nomear):
     # (2) Plot hypnogram
     # (2.1) Plot background
     for i, sk in enumerate(('W', 'N1', 'N2', 'N3', 'R')):
-      color = self.STAGE_COLORS[sk]
+      color = cls.STAGE_COLORS[sk]
       r = 0.45
       ax.axhspan(i - r, i + r, color=color, alpha=0.2)
 
