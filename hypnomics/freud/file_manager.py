@@ -58,7 +58,8 @@ class FileManager(Nomear):
       console.show_status(f"Created `{path}`.")
     return True
 
-  def _check_hierarchy(self, sg_label: str, channel=None, time_resolution=None,
+  def _check_hierarchy(self, sg_label: str, channel=None,
+                       band_key=None, time_resolution=None,
                        feature_name=None, create_if_not_exist=True,
                        return_false_if_not_exist=False):
     sg_path = os.path.join(self.work_dir, sg_label)
@@ -77,6 +78,13 @@ class FileManager(Nomear):
         self._check_path(channel_path, create=create_if_not_exist,
                          return_false_if_not_exist=return_false_if_not_exist)
 
+      if band_key is not None:
+        band_path = os.path.join(channel_path, f'{band_key}.band')
+        b_exist = self._check_path(
+          band_path, create=False,
+          return_false_if_not_exist=return_false_if_not_exist)
+        return band_path, b_exist
+
       if time_resolution is not None:
         tr_path = os.path.join(channel_path, f"{time_resolution}s")
         self._check_path(tr_path, create=create_if_not_exist,
@@ -90,6 +98,24 @@ class FileManager(Nomear):
         else: return tr_path
       else: return channel_path
     else: return sg_path
+
+  def _check_band_buffers(self, sg_path, psg_label, channels, bands):
+    for ck in channels:
+      if psg_label is None:
+        assert sg_path is not None and sg_path[-1] != '/'
+        sg_label = os.path.basename(sg_path)
+        sg_label = sg_label.split('(')[0]
+      else:
+        sg_label = psg_label
+
+      b_exist_list = [
+        self._check_hierarchy(
+          sg_label, channel=ck, band_key=bk, create_if_not_exist=False,
+          return_false_if_not_exist=True)[1]
+        for bk in bands]
+
+      if not all(b_exist_list): return False
+    return True
 
   def _check_cloud(self, sg_path, psg_label, channels, time_resolutions,
                    extractor_dict):

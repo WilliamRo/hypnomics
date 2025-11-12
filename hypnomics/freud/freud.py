@@ -44,6 +44,27 @@ class Freud(FileManager):
 
   # region: Public Methods
 
+  def generate_bandpass_filtered_sg(self, sg_path: str, pattern: str,
+                                    channels: list, bands: list,
+                                    overwrite=False, **kwargs):
+    def sg_filter(_path=None, _sg_label=None):
+      return not self._check_band_buffers(_path, _sg_label, channels, bands)
+
+    sg_file_list = finder.walk(sg_path, pattern=pattern)
+    n_all_files = len(sg_file_list)
+
+    if not overwrite:
+      sg_file_list = [path for path in sg_file_list if sg_filter(path)]
+
+    sg_generator = self._get_signal_group_generator(
+      sg_path, pattern=pattern, progress_bar=True, sg_file_list=sg_file_list,
+      **kwargs)
+
+    for sg in sg_generator:
+      self._generate_bandpass_filtered_data(
+        sg=sg, channels=channels, bands=bands, overwrite=overwrite)
+
+
   def generate_clouds(self, sg_path: str, pattern: str, channels: list,
                       time_resolutions: list, extractor_dict: dict=None,
                       overwrite=False, sg_file_list=None, **kwargs):
@@ -54,7 +75,6 @@ class Freud(FileManager):
     PARA_CHANNEL = kwargs.get('parallel_channel', False)
     # SG_PARA_N = kwargs.get('sg_para_number', 1)
 
-    # Create sg_generator, this is for more accuracy progress bar
     def sg_filter(_path=None, _sg_label=None):
       return not self._check_cloud(_path, _sg_label, channels, time_resolutions,
                                    extractor_dict)
@@ -72,6 +92,7 @@ class Freud(FileManager):
     if kwargs.get('return_sg_file_list', False):
       return sg_file_list, n_all_files
 
+    # Create sg_generator, this is for more accuracy progress bar
     sg_generator = self._get_signal_group_generator(
       sg_path, pattern=pattern, progress_bar=True,
       sg_file_list=sg_file_list, **kwargs)
@@ -90,6 +111,25 @@ class Freud(FileManager):
 
       # Clear buffer
       _BUFFER.clear()
+
+
+  def _generate_bandpass_filtered_data(self, sg: SignalGroup, channels, bands,
+                                       overwrite, progress=True):
+    eeg = sg.extract_channels(channels).as_eeg()
+    for bk in bands:
+      # data.shape = [channels, T]
+      data = eeg[bk]
+      for ck, s in zip(channels, data):
+        if progress: console.print_progress()
+
+        band_path, b_exist = self._check_hierarchy(
+          sg.label, channel=ck, band_key=bk,
+          create_if_not_exist=True, return_false_if_not_exist=True)
+
+        if b_exist and not overwrite: continue
+
+        # Save data
+        io.save_file(s, band_path, verbose=True)
 
 
   def _generate_clouds_in_sg(self, sg: SignalGroup, channels, time_resolutions,
