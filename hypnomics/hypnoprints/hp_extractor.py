@@ -190,7 +190,7 @@ def get_sg_stage_epoch_dict(sg: SignalGroup, stage_key, time_resolution=30):
     return se_dict
 
   return sg.get_from_pocket(
-    STAGE_EPOCH_KEY, initializer=_init_sg_stage_epoch_dict)
+    STAGE_EPOCH_KEY, initializer=_init_sg_stage_epoch_dict, local=True)
 
 
 def get_stage_map_dict(sg: SignalGroup, stage_key):
@@ -211,6 +211,6 @@ def get_stage_map_dict(sg: SignalGroup, stage_key):
     return map_dict
 
   return sg.get_from_pocket(
-    KEY_MAP_DICT, initializer=lambda: _init_map_dict(anno.labels))
+    KEY_MAP_DICT, initializer=lambda: _init_map_dict(anno.labels), local=True)
 
 # endregion: Utilities

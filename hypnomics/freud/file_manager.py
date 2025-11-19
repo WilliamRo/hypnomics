@@ -167,6 +167,7 @@ class FileManager(Nomear):
 
       if progress_bar: console.print_progress(i, len(_sg_file_list))
       yield sg
+      # sg._cloud_pocket.clear()
       del sg
 
   # endregion: Private Methods

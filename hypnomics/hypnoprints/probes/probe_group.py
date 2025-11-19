@@ -21,7 +21,7 @@ class ProbeGroup(Nomear):
 
   probe_keys = []
 
-  def generate_clouds(self, segments, channel_index) -> dict:
+  def generate_clouds(self, segments, channel_index, sg=None, tr=None) -> dict:
     """Returns a dictionary of clouds for each probe key.
 
     Args:
@@ -29,6 +29,7 @@ class ProbeGroup(Nomear):
         e.g., {'W': [array_1, ...], 'N1': [...], ...},
               where array_1.shape = (L, n_channels)
       channel_index: int, index of the channel to be processed
+      sg: SignalGroup, optional, the signal group object
     """
     from hypnomics.hypnoprints.hp_extractor import STAGE_KEYS
 

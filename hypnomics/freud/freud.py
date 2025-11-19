@@ -30,6 +30,7 @@ from roma import console
 from roma import finder
 from roma import io
 
+import gc
 import os
 import numpy as np
 import threading
@@ -100,6 +101,7 @@ class Freud(FileManager):
     from hypnomics.hypnoprints.probes.wavestats.power_probes import _BUFFER
 
     for sg in sg_generator:
+
       if not sg_filter(_sg_label=sg.label):
         console.warning(f'Clouds of `{sg.label}` has been created.')
 
@@ -111,6 +113,12 @@ class Freud(FileManager):
 
       # Clear buffer
       _BUFFER.clear()
+
+      # TODO: not an elegant solution, need to find the root cause
+      SignalGroup.cloud.clear()
+
+      # Trigger garbage collection
+      gc.collect()
 
 
   def _generate_bandpass_filtered_data(self, sg: SignalGroup, channels, bands,
@@ -176,7 +184,8 @@ class Freud(FileManager):
           # (3) Generate and save clouds
           if isinstance(extractor, ProbeGroup):
             # (3.1) If extractor is a ProbeGroup
-            clouds_dict: dict = extractor.generate_clouds(segments, chn_index)
+            clouds_dict: dict = extractor.generate_clouds(
+              segments, chn_index, sg=sg, tr=tr)
 
             for pk, clouds in clouds_dict.items():
               # (3.1.1) Get cloud path

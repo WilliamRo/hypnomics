@@ -16,6 +16,8 @@ from .wavestats.amp_probes import estimate_amp_envelope_v1
 from .wavestats.freq_probes import estimate_average_freq
 from .wavestats.freq_probes import estimate_freq_stft_v1
 
+from .wavestats.pac_probes import PAC_MI
+
 from .wavestats.power_probes import estimate_total_power
 from .wavestats.power_probes import estimate_delta_power_rela
 from .wavestats.power_probes import estimate_theta_power_rela
@@ -42,6 +44,7 @@ class ProbeLibrary(object):
   relative_power_beta = estimate_beta_power_rela
 
   class_power_group = PowerProbes
+  class_pac_mi_group = PAC_MI
 
   mean_absolute_gradient = mean_absolute_gradient
   kurtosis = kurtosis
