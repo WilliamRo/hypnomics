@@ -23,12 +23,12 @@ class PAC_MI(ProbeGroup):
 
   band_keys = ['delta_low', 'delta_high', 'theta', 'alpha',
                'beta_low', 'beta_high']
-  method = 'tort'
 
 
-  def __init__(self, fs):
+  def __init__(self, fs, method='tort'):
     super().__init__()
     self.fs = fs
+    self.method = method
 
 
   @property

@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ======-=========================================================-=============
+from .wavestats.amp_probes import estimate_amp_envelope_v0
 from .wavestats.amp_probes import estimate_amp_envelope_v1
 from .wavestats.freq_probes import estimate_average_freq
 from .wavestats.freq_probes import estimate_freq_stft_v1
+from .wavestats.fractal import estimate_higuchi_fd
 
 from .wavestats.pac_probes import PAC_MI
 
@@ -34,9 +36,11 @@ from .wavestats.sun17 import band_kurtosis
 
 
 class ProbeLibrary(object):
+  amplitude_h = estimate_amp_envelope_v0
   amplitude = estimate_amp_envelope_v1
   frequency_st = estimate_average_freq
   frequency_stft = estimate_freq_stft_v1
+  higuchi_fd = estimate_higuchi_fd
   total_power = estimate_total_power
   relative_power_delta = estimate_delta_power_rela
   relative_power_theta = estimate_theta_power_rela
@@ -56,6 +60,7 @@ class ProbeLibrary(object):
     'amplitude': amplitude,
     'frequency_ft': frequency_st,
     'frequency_stft': frequency_stft,
+    'higuchi_fd': higuchi_fd,
     'total_power': total_power,
     'relative_power_delta': relative_power_delta,
     'relative_power_theta': relative_power_theta,

@@ -16,6 +16,15 @@ import numpy as np
 
 
 
+def estimate_amp_envelope_v0(s: np.ndarray, *_, **__) -> float:
+  """Estimate average amplitude using Hilbert transform."""
+  from scipy.signal import hilbert
+  analytic_signal = hilbert(s.flatten())
+  amplitude_envelope = np.abs(analytic_signal)
+  mean_amp = np.mean(amplitude_envelope)
+  return mean_amp
+
+
 def estimate_amp_envelope_v1(s: np.ndarray, fs, window_size=1.0) -> float:
   """Estimate average amplitude of a signal based on signal envelope.
 
