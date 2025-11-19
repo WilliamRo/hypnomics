@@ -17,10 +17,7 @@ import numpy as np
 
 
 
-def estimate_higuchi_fd(s: np.ndarray, *_, **__) -> float:
-  # (1) Determine the number of time scales, or folds (k_max) for fitting
-  k = int(len(s) / 10)
-
+def estimate_higuchi_fd(s: np.ndarray, k: int, *_, **__) -> float:
   # Make sure k is at least 2, and there are at least 5 points in sub-signal
   k = max(2, min(k, int(len(s) / 5)))
 
