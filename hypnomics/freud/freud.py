@@ -66,6 +66,87 @@ class Freud(FileManager):
         sg=sg, channels=channels, bands=bands, overwrite=overwrite)
 
 
+  def convert_cloud_to_sg(self, sg: SignalGroup, time_resolution,
+                          channels: list, probe_keys: list,
+                          channel_name_map_dict: dict=None) -> SignalGroup:
+    """Convert a cloud back to a SignalGroup object. The returned SignalGroup
+       contains only one DigitalSignal object with a sampling frequency of
+       1 / `time_resolution`.
+    """
+    from hypnomics.hypnoprints.hp_extractor import DEFAULT_STAGE_KEY
+    from hypnomics.hypnoprints.hp_extractor import get_stage_map_dict
+
+    # (0) Preparations
+    # Get annotation
+    anno: Annotation = sg.annotations[DEFAULT_STAGE_KEY]
+    map_dict = get_stage_map_dict(sg, DEFAULT_STAGE_KEY)
+
+    data_list = []
+    channel_names = []
+    ticks, ticks_done = [], False
+
+    # (1) For each probe key and channel, load cloud data
+    for probe_key in probe_keys:
+      for channel in channels:
+        channel_names.append(f'{probe_key} ({channel})')
+        # (1.1) Load cloud
+        cloud_path, b_exist = self._check_hierarchy(
+          sg.label, channel=channel, time_resolution=time_resolution,
+          feature_name=probe_key, create_if_not_exist=False,
+          return_false_if_not_exist=True)
+
+        if not b_exist: raise FileNotFoundError(
+          f'!! Cloud file not found: {cloud_path} !!')
+
+        clouds = io.load_file(cloud_path)
+
+        # (1.2) Assemble data
+        probe_signal = []
+        for interval, anno_id in zip(anno.intervals, anno.annotations):
+          n = int(np.round(((interval[-1] - interval[0]) / time_resolution)))
+          assert n > 0
+
+          # TODO: somehow anno_id may not be in map_dict, need to check
+          try: sid = map_dict[anno_id]
+          except: sid = None
+
+          for i in range(n):
+            # Append value
+            if sid is not None:
+              skey = STAGE_KEYS[map_dict[anno_id]]
+              probe_signal.append(clouds[skey].pop(0))
+            else:
+              probe_signal.append(None)
+
+            # Append tick
+            if not ticks_done:
+              ticks.append(interval[0] + (i + 0.5) * time_resolution)
+
+        # Make sure all values in clouds have been used
+        for sk in STAGE_KEYS:
+          assert len(clouds[sk]) == 0, f'!! Unused values in clouds for {sk} !!'
+
+        data_list.append(np.array(probe_signal))
+
+        # Mark ticks as done
+        ticks_done = True
+
+    # (2) Wrap data and return
+    if channel_name_map_dict is not None:
+      for i, chn in enumerate(channel_names):
+        for k, v in channel_name_map_dict.items(): chn = chn.replace(k, v)
+        channel_names[i] = chn
+
+    ds = DigitalSignal(
+      data=np.stack(data_list, axis=-1),  # channels last
+      sfreq=1 / time_resolution, ticks=ticks, channel_names=channel_names)
+
+    cloud_sg = SignalGroup([ds], label=f'Clouds_of_{sg.label}')
+    cloud_sg.annotations = sg.annotations
+
+    return cloud_sg
+
+
   def generate_clouds(self, sg_path: str, pattern: str, channels: list,
                       time_resolutions: list, extractor_dict: dict=None,
                       overwrite=False, sg_file_list=None, **kwargs):
