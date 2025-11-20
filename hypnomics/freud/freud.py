@@ -114,7 +114,12 @@ class Freud(FileManager):
             # Append value
             if sid is not None:
               skey = STAGE_KEYS[map_dict[anno_id]]
-              probe_signal.append(clouds[skey].pop(0))
+              if len(clouds[skey]) == 0:
+                console.warning(
+                  f'!! No more values in cloud for {skey} in {sg.label}-{channel}-{probe_key} !!')
+                probe_signal.append(None)
+              else:
+                probe_signal.append(clouds[skey].pop(0))
             else:
               probe_signal.append(None)
 
@@ -141,7 +146,7 @@ class Freud(FileManager):
       data=np.stack(data_list, axis=-1),  # channels last
       sfreq=1 / time_resolution, ticks=ticks, channel_names=channel_names)
 
-    cloud_sg = SignalGroup([ds], label=f'Clouds_of_{sg.label}')
+    cloud_sg = SignalGroup([ds], label=sg.label)
     cloud_sg.annotations = sg.annotations
 
     return cloud_sg
