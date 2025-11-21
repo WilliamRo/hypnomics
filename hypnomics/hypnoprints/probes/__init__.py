@@ -33,6 +33,11 @@ from .wavestats.sun17 import sample_entropy
 from .wavestats.sun17 import relative_power_stats
 from .wavestats.sun17 import band_kurtosis
 
+from .wavestats.senate import spectral_edge_frequency
+from .wavestats.senate import BandSpectralCentroid
+from .wavestats.senate import lempel_ziv
+from .wavestats.senate import permutation_entropy
+
 
 
 class ProbeLibrary(object):
@@ -49,6 +54,7 @@ class ProbeLibrary(object):
 
   class_power_group = PowerProbes
   class_pac_mi_group = PAC_MI
+  class_band_spectral_centroid = BandSpectralCentroid
 
   mean_absolute_gradient = mean_absolute_gradient
   kurtosis = kurtosis
@@ -56,8 +62,14 @@ class ProbeLibrary(object):
   relative_power_stats = relative_power_stats
   band_kurtosis = band_kurtosis
 
+  spectral_edge_frequency = spectral_edge_frequency
+  lempel_ziv = lempel_ziv
+  permutation_entropy = permutation_entropy
+
+
   extractors = {
     'amplitude': amplitude,
+    'amplitude_h': amplitude_h,
     'frequency_ft': frequency_st,
     'frequency_stft': frequency_stft,
     'higuchi_fd': higuchi_fd,
@@ -71,7 +83,44 @@ class ProbeLibrary(object):
     'sample_entropy': sample_entropy,
     'relative_power_stats': relative_power_stats,
     'band_kurtosis': band_kurtosis,
+    'spectral_edge_frequency': spectral_edge_frequency,
+    'lempel_ziv': lempel_ziv,
+    'permutation_entropy': permutation_entropy,
   }
+
+  PROBE_GROUP_25 = 'RBP;BSC;TMI6;SEF;HFD;LEM;AMP'
+
+  @classmethod
+  def get_probe_keys(cls, probe_config):
+    assert isinstance(probe_config, (list, tuple, str))
+
+    probe_keys = []
+
+    # Pillar I: Intra-Band Features
+    # - Relative Band Power
+    if 'RBP' in probe_config: probe_keys.extend(
+      ['PR-DELTA_TOTAL', 'PR-THETA_TOTAL', 'PR-ALPHA_TOTAL',
+       'PR-BETA_TOTAL', 'PR-SIGMA_TOTAL'])
+
+    # - Band Spectral Centroid
+    if 'BSC' in probe_config:
+      bsc = BandSpectralCentroid(fs=None)
+      probe_keys.extend(bsc.probe_keys)
+
+    # Pillar II: Inter-Band Features
+    # - Cross-Frequency Coupling (CFC)
+    if 'TMI6' in probe_config:
+      tmi = PAC_MI(fs=None, method='tort')
+      probe_keys.extend(tmi.probe_keys)
+
+    # Pillar III: Overall Signal Features
+    if 'SEF' in probe_config: probe_keys.append('SEF-95')
+    # - Complexity
+    if 'HFD' in probe_config: probe_keys.append('HFD-10')
+    if 'LEM' in probe_config: probe_keys.append('LEMPEL_ZIV')
+    if 'AMP' in probe_config: probe_keys.append('HAMP')
+
+    return probe_keys
 
 
 pl = ProbeLibrary
