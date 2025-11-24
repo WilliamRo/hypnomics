@@ -33,17 +33,23 @@ class Extractor(Nomear):
   """
 
   DEFAULT_SETTINGS = {
-    'include_statistical_features': 1,
-    'include_inter_stage_features': 1,
-    'include_inter_channel_features': 1,
+    # Hypnomics 2025
+    'include_mu_sigma': 1,
+    'include_spatial_connectivity': 1,
+    'include_state_dynamics': 1,
+
+    # Hypnomics 2024
+    'include_statistical_features': 0,
+    'include_inter_stage_features': 0,
+    'include_inter_channel_features': 0,
 
     # Deprecated features
-    'include_proportion': False,
-    'include_stage_mean': False,
-    'include_stage_shift': False,
-    'include_stage_wise_covariance': False,
-    'include_channel_shift': False,
-    'include_all_mean_std': False,
+    'include_proportion': 0,
+    'include_stage_mean': 0,
+    'include_stage_shift': 0,
+    'include_stage_wise_covariance': 0,
+    'include_channel_shift': 0,
+    'include_all_mean_std': 0,
   }
 
   def __init__(self, probe_keys=None, **settings):
@@ -59,6 +65,20 @@ class Extractor(Nomear):
     self.settings.update(settings)
 
     # Add build-in extractors according to settings
+    # Group A - Mu & Sigma features
+    if self.settings['include_mu_sigma']:
+      self.extractors.append(
+        lambda neb, lbl: self.extract_statistical_features(
+          neb, lbl, include_cov=False))
+
+    # Group B - Spatial connectivity features
+    if self.settings['include_spatial_connectivity']:
+      self.extractors.append(self.extract_spatial_connectivity)
+
+    # Group C - State dynamics features
+    if self.settings['include_state_dynamics']:
+      self.extractors.append(self.extract_state_dynamics)
+
     # Group I - Macro features
     if self.settings['include_proportion']:
       self.extractors.append(self.extract_proportion)
@@ -170,7 +190,88 @@ class Extractor(Nomear):
 
   # region: Build-in Extractors
 
-  def extract_statistical_features(self, nebula: Nebula, label):
+  def extract_state_dynamics(self, nebula: Nebula, label):
+    """Extract state dynamics features."""
+    # Set probe keys
+    if self.probe_keys is None: probe_keys = nebula.probe_keys
+    else: probe_keys = self.probe_keys
+    n_probes = len(probe_keys)
+
+    # Get reference stage key
+    rsk = self.reference_stage
+    assert rsk in nebula.STAGE_KEYS
+
+    # Traverse each probe and channel
+    x_dict = OrderedDict()
+    for i in range(n_probes):
+      pi = probe_keys[i]
+      for ck in nebula.channels:
+        # E.g., 'EEG Fpz-Cz' -> 'Fpz-Cz'
+        ck_short = self._get_ck(ck)
+        for sk in nebula.STAGE_KEYS:
+          if sk == rsk: continue
+          skr2sk_ck = f'{ck_short}_{rsk}->{sk}'
+
+          # (1) AVG
+          cloud_i_sk = self._get_cloud(nebula, label, ck, pi, sk)
+          avg_i = self._calc_mean(cloud_i_sk)
+
+          cloud_i_rsk = self._get_cloud(nebula, label, ck, pi, rsk)
+          avg_r = self._calc_mean(cloud_i_rsk)
+
+          x_dict[f'SD_AVG({pi})_{skr2sk_ck}'] = avg_i - avg_r
+
+          # (2) STD
+          std_i = self._calc_std(cloud_i_sk)
+          std_r = self._calc_std(cloud_i_rsk)
+
+          x_dict[f'SD_STD({pi})_{skr2sk_ck}'] = std_i - std_r
+
+    # Return
+    return x_dict
+
+  def extract_spatial_connectivity(self, nebula: Nebula, label):
+    """Extract the off diagonal elements of the covariance matrix corresponding
+    to spatial connectivity between channels.
+    """
+    # Set probe keys
+    if self.probe_keys is None: probe_keys = nebula.probe_keys
+    else: probe_keys = self.probe_keys
+    n_probes = len(probe_keys)
+
+    # Traverse each channel and stage
+    x_dict = OrderedDict()
+    ck_pairs = [(nebula.channels[i], nebula.channels[j])
+                for i in range(len(nebula.channels))
+                for j in range(i + 1, len(nebula.channels))]
+    for ck1, ck2 in ck_pairs:
+      # E.g., 'EEG Fpz-Cz' -> 'Fpz-Cz'
+      ck1_short = self._get_ck(ck1)
+      ck2_short = self._get_ck(ck2)
+      for sk in nebula.STAGE_KEYS:
+        sk_ck1_ck2 = f'{sk}_{ck1_short}_{ck2_short}'
+        for i in range(n_probes):
+          # William @ 2025-Nov: Why not use pk instead of pi?
+          pi = probe_keys[i]
+          cloud_i_ck1_w_none = self._get_cloud(nebula, label, ck1, pi, sk,
+                                              remove_none=False)
+          cloud_i_ck2_w_none = self._get_cloud(nebula, label, ck2, pi, sk,
+                                              remove_none=False)
+          _cloud_i_ck1, _cloud_i_ck2 = self._remove_none(
+            cloud_i_ck1_w_none, cloud_i_ck2_w_none)
+          if len(_cloud_i_ck1) < 2: value = 0
+          else:
+            value = np.corrcoef(_cloud_i_ck1, _cloud_i_ck2)[0, 1]
+            # TODO
+            if np.isnan(value): value = 0
+
+          x_dict[f'COV({pi}_{sk_ck1_ck2})'] = value
+
+    # Return
+    return x_dict
+
+  def extract_statistical_features(self, nebula: Nebula, label,
+                                   include_cov=True):
     """Extract statistical features, including mean, STD, covariance of each pair
     of probes in each sleep stage in each channel."""
     # Set probe keys
@@ -192,10 +293,16 @@ class Extractor(Nomear):
         # (1) AVG
         x_dict[f'AVG({pi})_{sk_ck}'] = self._calc_mean(cloud_i)
 
+        # TODO: DEBUG
+        fk = f'AVG({pi})_{sk_ck}'
+        if x_dict[fk] == 0:
+          print()
+
         # (2) STD
         x_dict[f'STD({pi})_{sk_ck}'] = self._calc_std(cloud_i)
 
         # (3) COR: Pearson's correlation coefficient
+        if not include_cov: continue
         cloud_i_w_none = self._get_cloud(nebula, label, ck, pi, sk, False)
         for j in range(i + 1, n_probes):
           pj = probe_keys[j]

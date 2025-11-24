@@ -91,27 +91,33 @@ class ProbeLibrary(object):
   PROBE_GROUP_25 = 'RBP;BSC;TMI6;SEF;HFD;LEM;AMP'
 
   @classmethod
-  def get_probe_keys(cls, probe_config):
+  def get_probe_keys(cls, probe_config, for_generation=False):
     assert isinstance(probe_config, (list, tuple, str))
 
     probe_keys = []
 
     # Pillar I: Intra-Band Features
     # - Relative Band Power
-    if 'RBP' in probe_config: probe_keys.extend(
-      ['PR-DELTA_TOTAL', 'PR-THETA_TOTAL', 'PR-ALPHA_TOTAL',
-       'PR-BETA_TOTAL', 'PR-SIGMA_TOTAL'])
+    if 'RBP' in probe_config:
+      if for_generation: probe_keys.append('power_group')
+      else: probe_keys.extend( [
+        'PR-DELTA_TOTAL', 'PR-THETA_TOTAL', 'PR-ALPHA_TOTAL',
+        'PR-BETA_TOTAL', 'PR-SIGMA_TOTAL'])
 
     # - Band Spectral Centroid
     if 'BSC' in probe_config:
-      bsc = BandSpectralCentroid(fs=None)
-      probe_keys.extend(bsc.probe_keys)
+      if for_generation: probe_keys.append('BSC')
+      else:
+        bsc = BandSpectralCentroid(fs=None)
+        probe_keys.extend(bsc.probe_keys)
 
     # Pillar II: Inter-Band Features
     # - Cross-Frequency Coupling (CFC)
     if 'TMI6' in probe_config:
-      tmi = PAC_MI(fs=None, method='tort')
-      probe_keys.extend(tmi.probe_keys)
+      if for_generation: probe_keys.append('tort')
+      else:
+        tmi = PAC_MI(fs=None, method='tort')
+        probe_keys.extend(tmi.probe_keys)
 
     # Pillar III: Overall Signal Features
     if 'SEF' in probe_config: probe_keys.append('SEF-95')
