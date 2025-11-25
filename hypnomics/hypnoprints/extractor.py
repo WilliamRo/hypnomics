@@ -148,7 +148,7 @@ class Extractor(Nomear):
     # TODO: Handle empty cloud
     if len(data) == 0: return 0
 
-    if self.settings.get('remove_outliers', True):
+    if self.settings.get('remove_outliers', False):
       data = remove_outliers(data)
     return np.mean(data)
 
@@ -156,7 +156,7 @@ class Extractor(Nomear):
     # TODO: Handle empty cloud
     if len(data) == 0: return 0
 
-    if self.settings.get('remove_outliers', True):
+    if self.settings.get('remove_outliers', False):
       data = remove_outliers(data)
     return np.std(data)
 
@@ -290,13 +290,14 @@ class Extractor(Nomear):
         pi = probe_keys[i]
         # cloud_i without None
         cloud_i = self._get_cloud(nebula, label, ck, pi, sk)
+
+        # If N3 stage has too few samples, use N2 samples instead
+        if len(cloud_i) < 2:
+          if sk == 'N3':
+            cloud_i = self._get_cloud(nebula, label, ck, pi, 'N2')
+
         # (1) AVG
         x_dict[f'AVG({pi})_{sk_ck}'] = self._calc_mean(cloud_i)
-
-        # TODO: DEBUG
-        fk = f'AVG({pi})_{sk_ck}'
-        if x_dict[fk] == 0:
-          print()
 
         # (2) STD
         x_dict[f'STD({pi})_{sk_ck}'] = self._calc_std(cloud_i)

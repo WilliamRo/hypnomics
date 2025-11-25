@@ -128,7 +128,7 @@ class BandSpectralCentroid(ProbeGroup):
       #    Add epsilon to denominator to prevent division by zero if power is 0
       total_band_power = np.sum(band_psd)
 
-      if total_band_power < 1e-10:
+      if total_band_power == 0:
         features[pk] = 0.0
       else:
         centroid = np.sum(band_freqs * band_psd) / total_band_power
