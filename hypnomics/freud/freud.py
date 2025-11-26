@@ -427,6 +427,9 @@ class Freud(FileManager):
       # Save macro feature vector
       io.save_file(x_dict, macro_path, verbose=True)
 
+      # TODO: not an elegant solution, need to find the root cause
+      SignalGroup.cloud.clear()
+
   # endregion: Public Methods
 
 

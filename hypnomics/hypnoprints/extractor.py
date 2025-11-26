@@ -214,6 +214,12 @@ class Extractor(Nomear):
 
           # (1) AVG
           cloud_i_sk = self._get_cloud(nebula, label, ck, pi, sk)
+
+          # If N3 stage has too few samples, use N2 samples instead
+          if len(cloud_i_sk) < 2:
+            if sk == 'N3':
+              cloud_i_sk = self._get_cloud(nebula, label, ck, pi, 'N2')
+
           avg_i = self._calc_mean(cloud_i_sk)
 
           cloud_i_rsk = self._get_cloud(nebula, label, ck, pi, rsk)
@@ -255,8 +261,18 @@ class Extractor(Nomear):
           pi = probe_keys[i]
           cloud_i_ck1_w_none = self._get_cloud(nebula, label, ck1, pi, sk,
                                               remove_none=False)
+
           cloud_i_ck2_w_none = self._get_cloud(nebula, label, ck2, pi, sk,
                                               remove_none=False)
+
+          # if N3 stage has too few samples, use N2 samples instead
+          if len(cloud_i_ck1_w_none) < 2:
+            if sk == 'N3':
+              cloud_i_ck1_w_none = self._get_cloud(
+                nebula, label, ck1, pi, 'N2', remove_none=False)
+              cloud_i_ck2_w_none = self._get_cloud(
+                nebula, label, ck2, pi, 'N2', remove_none=False)
+
           _cloud_i_ck1, _cloud_i_ck2 = self._remove_none(
             cloud_i_ck1_w_none, cloud_i_ck2_w_none)
           if len(_cloud_i_ck1) < 2: value = 0
