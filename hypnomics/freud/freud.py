@@ -66,6 +66,70 @@ class Freud(FileManager):
         sg=sg, channels=channels, bands=bands, overwrite=overwrite)
 
 
+  def generate_probe_signals_from_sg(
+      self, sg: SignalGroup, time_resolution: int, channels: list,
+      extractor_dict: dict, channel_name_map_dict: dict = None,
+      verbose=False,
+  ) -> SignalGroup:
+    """Generate probe signals from a SignalGroup object. Returns a new
+    signal group containing only one DigitalSignal object with a sampling
+    frequency of 1 / `time_resolution`.
+    """
+    # I. Generate epoch lists (tapes)
+    # segments[i].shape = [L, C]
+    _channels = channels
+    segments, channels = sg.convert_to_epochs(
+      time_resolution, _channels, return_channel_names=True)
+    assert len(_channels) == len(channels)
+    assert all([ck in channels for ck in _channels])
+
+    # II. For each extractor, generate probe sequences
+    chn_probe_dict = OrderedDict()
+    for chn_index, ck in enumerate(channels):
+      chn_probe_dict[ck] = OrderedDict()
+
+      # Extract probes for each extractor for this channel
+      for feature_key, extractor in extractor_dict.items():
+        if verbose: console.show_status(
+          f'Extracting {feature_key} from {ck} for {sg.label} ...')
+
+        if isinstance(extractor, ProbeGroup):
+          # Initialize probe lists for each probe
+          for pk in extractor.probe_keys: chn_probe_dict[ck][pk] = []
+          # Calculate probe values for each epoch (segment)
+          for array in segments:
+            assert len(array.shape) == 2
+            feature_dict = extractor._generate_feature_dict(array[:, chn_index])
+            for pk, value in feature_dict.items():
+              chn_probe_dict[ck][pk].append(value)
+        else:
+          chn_probe_dict[ck][feature_key] = [
+            extractor(s[:, chn_index]) for s in segments]
+
+    # III. Wrap into DigitalSignal and SignalGroup
+    data_list, ck_pk_list = [], []
+    for ck in channels:
+      for pk, probe_sequence in chn_probe_dict[ck].items():
+        data_list.append(np.array(probe_sequence))
+
+        # Generate channel-probe names
+        ck_pk = f'{ck} {pk}'
+        if channel_name_map_dict is not None:
+          for k, v in channel_name_map_dict.items(): ck_pk = ck_pk.replace(k, v)
+        ck_pk_list.append(ck_pk)
+
+    t0 = sg.digital_signals[0].off_set
+    ticks = [t0 + (i + 0.5) * time_resolution for i in range(len(data_list[0]))]
+    ds = DigitalSignal(
+      data=np.stack(data_list, axis=-1),  # channels last
+      sfreq=1 / time_resolution, ticks=ticks, channel_names=ck_pk_list)
+
+    probe_sg = SignalGroup([ds], label=sg.label)
+    probe_sg.annotations = sg.annotations
+
+    return probe_sg
+
+
   def convert_cloud_to_sg(self, sg: SignalGroup, time_resolution,
                           channels: list, probe_keys: list,
                           channel_name_map_dict: dict=None) -> SignalGroup:
