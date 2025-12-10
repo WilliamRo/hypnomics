@@ -66,8 +66,9 @@ class Freud(FileManager):
         sg=sg, channels=channels, bands=bands, overwrite=overwrite)
 
 
+  @staticmethod
   def generate_probe_signals_from_sg(
-      self, sg: SignalGroup, time_resolution: int, channels: list,
+      sg: SignalGroup, time_resolution: int, channels: list,
       extractor_dict: dict, channel_name_map_dict: dict = None,
       verbose=False,
   ) -> SignalGroup:
