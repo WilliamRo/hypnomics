@@ -247,6 +247,7 @@ class Extractor(Nomear):
 
     # Traverse each channel and stage
     x_dict = OrderedDict()
+    # TODO: Maybe the pairs are too many
     ck_pairs = [(nebula.channels[i], nebula.channels[j])
                 for i in range(len(nebula.channels))
                 for j in range(i + 1, len(nebula.channels))]

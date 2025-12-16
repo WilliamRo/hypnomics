@@ -136,3 +136,71 @@ class BandSpectralCentroid(ProbeGroup):
 
     return features
 
+
+
+class BandPeakFrequency(ProbeGroup):
+
+  band_keys = ['delta', 'theta', 'alpha', 'beta']
+  default_method = 'welch'
+
+  def __init__(self, fs):
+    super().__init__()
+    self.fs = fs
+
+
+  @property
+  def probe_keys(self) -> list:
+    return [self.bk2pk(bk) for bk in self.band_keys]
+
+  @classmethod
+  def bk2pk(cls, band_key: str) -> str:
+    return f'PF_{band_key.upper()}'
+
+
+  def _generate_feature_dict(self, x, nperseg=None) -> dict:
+    """Calculates the Band Peak Frequency for specified bands.
+
+    Parameters:
+    - x: 1D numpy array (the EEG epoch)
+    - nperseg: Length of Welch segment (defaults to len(x) for smooth spectrum)
+
+    Returns:
+    - Dictionary with probe_keys
+    """
+    # 1. Calculate PSD using Welch's method
+    #    nperseg=len(x) gives the highest frequency resolution for the epoch
+    if nperseg is None: nperseg = len(x)
+
+    assert self.default_method == 'welch'
+    freqs, psd = welch(x, fs=self.fs, nperseg=nperseg)
+
+    # Define bands of interest
+    bands = {
+      'delta': (0.5, 4),
+      'theta': (4, 8),
+      'alpha': (8, 12),
+      'beta': (12, 30)
+    }
+
+    features = {}
+
+    for bk in self.band_keys:
+      low, high = bands[bk]
+      pk = self.bk2pk(bk)
+
+      # 2. Find indices for this band
+      #    We use >= low and < high to avoid overlap issues
+      idx = np.where((freqs >= low) & (freqs < high))[0]
+
+      assert len(idx) > 0
+
+      # Extract the relevant slice of Frequency and Power
+      band_freqs = freqs[idx]
+      band_psd = psd[idx]
+
+      # 3. Find Peak Frequency: frequency with maximum power in the band
+      peak_idx = np.argmax(band_psd)
+      peak = band_freqs[peak_idx]
+      features[pk] = peak
+
+    return features

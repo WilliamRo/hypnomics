@@ -110,9 +110,12 @@ class PowerProbes(ProbeGroup):
                 'PR-DELTA_ALPHA', 'PR-THETA_ALPHA']
   default_method = 'welch'
 
-  def __init__(self, fs):
+  def __init__(self, fs, log=False):
     super().__init__()
     self.fs = fs
+    self.log = log
+    if log: self.probe_keys = [
+      'L' + pk if pk != 'POWER-30' else pk for pk in self.probe_keys]
 
   def _generate_feature_dict(self, array) -> dict:
     power_dict = estimate_power(array, self.fs, band='*',
@@ -123,7 +126,10 @@ class PowerProbes(ProbeGroup):
     pr = lambda key1, key2: power_dict[key1] / (power_dict[key2] + 1e-6)
     for pk in self.probe_keys[1:]:
       key1, key2 = pk.split('-')[1].split('_')
-      feature_dict[pk] = pr(key1.lower(), key2.lower())
+
+      value = pr(key1.lower(), key2.lower())
+      if self.log: value = np.log(value)
+      feature_dict[pk] = value
 
     # Check and return
     assert len(feature_dict) == len(self.probe_keys)

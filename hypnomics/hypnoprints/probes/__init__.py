@@ -35,8 +35,11 @@ from .wavestats.sun17 import band_kurtosis
 
 from .wavestats.senate import spectral_edge_frequency
 from .wavestats.senate import BandSpectralCentroid
+from .wavestats.senate import BandPeakFrequency
 from .wavestats.senate import lempel_ziv
 from .wavestats.senate import permutation_entropy
+
+from collections import OrderedDict
 
 
 
@@ -55,6 +58,7 @@ class ProbeLibrary(object):
   class_power_group = PowerProbes
   class_pac_mi_group = PAC_MI
   class_band_spectral_centroid = BandSpectralCentroid
+  class_band_peak_frequency = BandPeakFrequency
 
   mean_absolute_gradient = mean_absolute_gradient
   kurtosis = kurtosis
@@ -89,6 +93,7 @@ class ProbeLibrary(object):
   }
 
   PROBE_GROUP_25 = 'RBP;BSC;TMI6;SEF;HFD;LEM;AMP'
+  PROBE_GROUP_26 = 'LRP;BPF;TMI6;HFD;AMP'
 
   @classmethod
   def get_probe_keys(cls, probe_config, for_generation=False):
@@ -103,6 +108,19 @@ class ProbeLibrary(object):
       else: probe_keys.extend( [
         'PR-DELTA_TOTAL', 'PR-THETA_TOTAL', 'PR-ALPHA_TOTAL',
         'PR-BETA_TOTAL', 'PR-SIGMA_TOTAL'])
+
+    if 'LRP' in probe_config:
+      if for_generation: probe_keys.append('power_group_log')
+      else:
+        pp = PowerProbes(fs=None)
+        probe_keys.extend(pp.probe_keys[1:])
+
+    # - Band Peak Frequency
+    if 'BPF' in probe_config:
+      if for_generation: probe_keys.append('BPF')
+      else:
+        bpf = BandPeakFrequency(fs=None)
+        probe_keys.extend(bpf.probe_keys)
 
     # - Band Spectral Centroid
     if 'BSC' in probe_config:
@@ -127,6 +145,83 @@ class ProbeLibrary(object):
     if 'AMP' in probe_config: probe_keys.append('HAMP')
 
     return probe_keys
+
+
+def get_extractor_dict(keys, **kwargs):
+  od = OrderedDict()
+
+  for key in keys:
+    if '-' in key: name, arg = key.split('-')
+    else: name, arg = key, None
+
+    if name == 'AMP':
+      _fs = kwargs.get('fs')
+      _ws = float(arg)
+      od[key] = lambda s, fs=_fs, ws=_ws: ProbeLibrary.amplitude(
+        s, fs=fs, window_size=ws)
+    elif name == 'HAMP':
+      od[key] = ProbeLibrary.amplitude_h
+    elif name == 'FREQ':
+      _fs = kwargs.get('fs')
+      _fmax = float(arg)
+      od[key] = lambda s, fs=_fs, fmax=_fmax: ProbeLibrary.frequency_stft(
+        s, fs=fs, fmax=fmax)
+    elif name == 'GFREQ':
+      _fs = kwargs.get('fs')
+      _fmax = float(arg)
+      od[key] = lambda s, fs=_fs, fmax=_fmax: ProbeLibrary.frequency_st(
+        s, fs=fs, fmax=fmax)
+    elif name in ('P', 'RP'):
+      _fs = kwargs.get('fs')
+      od[key] = lambda s, fs=_fs, band=arg: ProbeLibrary.total_power(
+        s, fs=fs, band=band)
+    elif name == 'MAG':
+      od[key] = lambda s: ProbeLibrary.mean_absolute_gradient(s)
+    elif name == 'KURT':
+      od[key] = lambda s: ProbeLibrary.kurtosis(s)
+    elif name == 'ENTROPY':
+      od[key] = lambda s: ProbeLibrary.sample_entropy(s)
+    elif name == 'RPS':
+      _fs = kwargs.get('fs')
+      _b1, _b2, _st = arg.split('_')
+      _st = {'95': '95th percentile', 'MIN': 'min',
+             'AVG': 'mean', 'STD': 'std'}[_st]
+      od[key] = lambda s, fs=_fs, b1=_b1, b2=_b2, st=_st: ProbeLibrary.relative_power_stats(
+        s, fs=fs, band1=b1, band2=b2, stat_key=st)
+    elif name == 'BKURT':
+      _fs = kwargs.get('fs')
+      od[key] = lambda s, fs=_fs, band=arg: ProbeLibrary.band_kurtosis(
+        s, fs=fs, band=band)
+    elif name == 'power_group':
+      _fs = kwargs.get('fs')
+      od[key] = ProbeLibrary.class_power_group(_fs)
+    elif name == 'power_group_log':
+      _fs = kwargs.get('fs')
+      od[key] = ProbeLibrary.class_power_group(_fs, log=True)
+    elif name in ('pac_mi_group', 'pac_mi', 'tort'):
+      _fs = kwargs.get('fs')
+      od[key] = ProbeLibrary.class_pac_mi_group(_fs, method='tort')
+    elif name in ('BSC',):
+      _fs = kwargs.get('fs')
+      od[key] = ProbeLibrary.class_band_spectral_centroid(_fs)
+    elif name in ('BPF',):
+      _fs = kwargs.get('fs')
+      od[key] = ProbeLibrary.class_band_peak_frequency(_fs)
+    elif name in ('hfd', 'HFD'):
+      if arg is None: _k = 10  # default
+      else: _k = int(arg)
+      od[key] = lambda s: ProbeLibrary.higuchi_fd(s, k=_k)
+    elif name in ('LEM', 'LEMPEL_ZIV'):
+      od[key] = lambda s: ProbeLibrary.lempel_ziv(s)
+    elif name == 'SEF':
+      if arg is None: _ep = 0.95  # default
+      else: _ep = float(arg) / 100
+      _fs = kwargs.get('fs')
+      od[key] = lambda s: ProbeLibrary.spectral_edge_frequency(
+        s, fs=_fs, edge_percent=_ep)
+    else: raise KeyError(f'Unknown key: {key}')
+
+  return od
 
 
 pl = ProbeLibrary
