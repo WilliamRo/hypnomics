@@ -195,7 +195,8 @@ class Hans(Plotter):
     # (1) Calculate KDE
     m = self.get('margin')
     kde_key = '::'.join(['HANS_KDE', self.selected_clouds,
-                         self.selected_channel, stage_key, str(m)])
+                         self.selected_channel, stage_key,
+                         self.pictor.x_key, self.pictor.y_key, str(m)])
     if not self.nebula.in_pocket(kde_key):
       X, Y, Z = self.calc_kde(m1, m2, m)
       self.nebula.put_into_pocket(kde_key, (X, Y, Z), local=True)

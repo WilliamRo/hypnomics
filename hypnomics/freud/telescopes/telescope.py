@@ -132,4 +132,18 @@ class Telescope(Pictor):
       title='Save as', filetypes=[('NEBULA files', '*.nebula')])
     if file_path is not None: self.nebula.save(file_path)
 
+  def set_key(self, key: str, axis: int = 0):
+    # Make sure the key exists
+    if key not in self.nebula.probe_keys:
+      print(f'[Telescope] >> Key `{key}` not found in nebula.')
+      return
+
+    # Set key according to axis
+    if axis == 0: self.x_key = key
+    elif axis == 1: self.y_key = key
+    else: raise ValueError(f'Axis `{axis}` is not supported. Should be 0 or 1.')
+
+    # Refresh
+    self.refresh()
+
   # endregion: Public Methods

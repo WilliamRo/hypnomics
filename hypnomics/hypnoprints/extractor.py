@@ -246,11 +246,50 @@ class Extractor(Nomear):
     n_probes = len(probe_keys)
 
     # Traverse each channel and stage
+    # TODO: important! GENERATING PAIRS
+    ck_pairs = []
+    all_channels = nebula.channels
+
+    if len(all_channels) <= 2:
+      ck_pairs = [(nebula.channels[i], nebula.channels[j])
+                  for i in range(len(nebula.channels))
+                  for j in range(i + 1, len(nebula.channels))]
+    else:
+      # (1) Inter-hemispheric pairs (Left vs. Right).
+      # These measure communication between the two brain hemispheres.
+      # 1.1 Frontal:
+      frontal_channels = [ck for ck in all_channels
+                          if any(['F3' in ck, 'F4' in ck])]
+      if len(frontal_channels) == 2:
+        ck_pairs.append(tuple(frontal_channels))
+
+      # 1.2 Central:
+      central_channels = [ck for ck in all_channels
+                          if any(['C3' in ck, 'C4' in ck])]
+      if len(central_channels) == 2:
+        ck_pairs.append(tuple(central_channels))
+
+      # 1.3 Occipital:
+      occipital_channels = [ck for ck in all_channels
+                            if any(['O1' in ck, 'O2' in ck])]
+      if len(occipital_channels) == 2:
+        ck_pairs.append(tuple(occipital_channels))
+
+      # (2) Intra-hemispheric pairs (Front vs. Back).
+      # These measure the "anterior-posterior" gradient
+      # 2.1 Left Hemisphere:
+      left_channels = [ck for ck in all_channels
+                       if any(['F3' in ck, 'O1' in ck])]
+      if len(left_channels) == 2:
+        ck_pairs.append(tuple(left_channels))
+
+      # 2.2 Right Hemisphere:
+      right_channels = [ck for ck in all_channels
+                        if any(['F4' in ck, 'O2' in ck])]
+      if len(right_channels) == 2:
+        ck_pairs.append(tuple(right_channels))
+
     x_dict = OrderedDict()
-    # TODO: Maybe the pairs are too many
-    ck_pairs = [(nebula.channels[i], nebula.channels[j])
-                for i in range(len(nebula.channels))
-                for j in range(i + 1, len(nebula.channels))]
     for ck1, ck2 in ck_pairs:
       # E.g., 'EEG Fpz-Cz' -> 'Fpz-Cz'
       ck1_short = self._get_ck(ck1)
@@ -261,10 +300,10 @@ class Extractor(Nomear):
           # William @ 2025-Nov: Why not use pk instead of pi?
           pi = probe_keys[i]
           cloud_i_ck1_w_none = self._get_cloud(nebula, label, ck1, pi, sk,
-                                              remove_none=False)
+                                               remove_none=False)
 
           cloud_i_ck2_w_none = self._get_cloud(nebula, label, ck2, pi, sk,
-                                              remove_none=False)
+                                               remove_none=False)
 
           # if N3 stage has too few samples, use N2 samples instead
           if len(cloud_i_ck1_w_none) < 2:

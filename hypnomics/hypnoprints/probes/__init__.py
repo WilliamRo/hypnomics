@@ -112,7 +112,7 @@ class ProbeLibrary(object):
     if 'LRP' in probe_config:
       if for_generation: probe_keys.append('power_group_log')
       else:
-        pp = PowerProbes(fs=None)
+        pp = PowerProbes(fs=None, log=True)
         probe_keys.extend(pp.probe_keys[1:])
 
     # - Band Peak Frequency
