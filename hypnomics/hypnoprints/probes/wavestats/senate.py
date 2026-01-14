@@ -82,7 +82,7 @@ class BandSpectralCentroid(ProbeGroup):
     return f'SC_{band_key.upper()}'
 
 
-  def _generate_feature_dict(self, x, nperseg=None) -> dict:
+  def _generate_feature_dict(self, x, nperseg=None, **kwargs) -> dict:
     """Calculates the Spectral Centroid (Center of Mass) for specified bands.
 
     Parameters:
@@ -157,7 +157,7 @@ class BandPeakFrequency(ProbeGroup):
     return f'PF_{band_key.upper()}'
 
 
-  def _generate_feature_dict(self, x, nperseg=None) -> dict:
+  def _generate_feature_dict(self, x, nperseg=None, **kwargs) -> dict:
     """Calculates the Band Peak Frequency for specified bands.
 
     Parameters:

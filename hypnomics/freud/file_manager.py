@@ -13,8 +13,9 @@
 # limitations under the License.
 # ====-======================================================================-==
 from hypnomics.hypnoprints.probes.probe_group import ProbeGroup
+from hypnomics.freud.flow import Flow
 from hypnomics.freud.nebula import Nebula
-from pictor.objects.signals.signal_group import SignalGroup
+from pictor.objects.signals.signal_group import SignalGroup, Annotation
 from roma import console
 from roma import finder
 from roma import io
@@ -25,7 +26,7 @@ import os
 
 
 class FileManager(Nomear):
-  """Rule of organization for cloud files:
+  """Rule of organization for cloud and trajectory files:
   ROOT -> PID -> Channel -> Time Resolution -> <feature_name>.clouds
 
   ROOT                                            Lv1: Working directory
@@ -34,7 +35,9 @@ class FileManager(Nomear):
    │    ├── Channel_1                             Lv3: Channel name
    │    │    ├── 30s                              Lv4: Time resolution
    │    │    │    ├── AMP_128.clouds              Lv5: Feature name
-   │    │    │    └── FREQ_20.clouds
+   │    │    │    ├── FREQ_20.clouds
+   │    │    │    ├── AMP_128.traj
+   │    │    │    └── FREQ_20.traj
    │    │    ├── 10s
    ⋮    ⋮    ⋮
    │    ├── Channel_2
@@ -61,7 +64,7 @@ class FileManager(Nomear):
   def _check_hierarchy(self, sg_label: str, channel=None,
                        band_key=None, time_resolution=None,
                        feature_name=None, create_if_not_exist=True,
-                       return_false_if_not_exist=False):
+                       return_false_if_not_exist=False, extension='clouds'):
     sg_path = os.path.join(self.work_dir, sg_label)
     self._check_path(sg_path, create=create_if_not_exist,
                      return_false_if_not_exist=return_false_if_not_exist)
@@ -91,7 +94,7 @@ class FileManager(Nomear):
                          return_false_if_not_exist=return_false_if_not_exist)
 
         if feature_name is not None:
-          feature_path = os.path.join(tr_path, f"{feature_name}.clouds")
+          feature_path = os.path.join(tr_path, f"{feature_name}.{extension}")
           b_exist = self._check_path(feature_path, create=False,
                                      return_false_if_not_exist=True)
           return feature_path, b_exist
@@ -118,7 +121,7 @@ class FileManager(Nomear):
     return True
 
   def _check_cloud(self, sg_path, psg_label, channels, time_resolutions,
-                   extractor_dict):
+                   extractor_dict, traj=False):
     for ck in channels:
       for tr in time_resolutions:
         for pk, probe in extractor_dict.items():
@@ -137,7 +140,8 @@ class FileManager(Nomear):
           b_exist_list = [
             self._check_hierarchy(
               sg_label, channel=ck, time_resolution=tr, feature_name=pk,
-              create_if_not_exist=False, return_false_if_not_exist=True)[1]
+              create_if_not_exist=False, return_false_if_not_exist=True,
+              extension='traj' if traj else 'clouds')[1]
             for pk in pk_list]
 
           if not all(b_exist_list): return False
@@ -225,6 +229,95 @@ class FileManager(Nomear):
       console.show_status(f'Loaded nebula from {len(sg_labels)} PSG records.')
 
     return nebula
+
+  def load_flow(self, sg_labels: list, sg_file_path_list: list,
+                channels: list, time_resolution: int, probe_keys: list,
+                name='Flow', verbose=False, meta=None) -> Flow:
+    """Load a Flow object from the given signal group labels, channels,
+    time resolution, and probe keys.
+
+    Args
+    ----
+    channels: list of channel names. Can be:
+    (1) ['EEG Fpz-Oz', 'EEG Fz-Cz'];
+    (2) [('EEG F3-REF', 'EEG F3-CLE', 'EEG F3-LER'),
+         ('EEG F4-REF', 'EEG F4-CLE', 'EEG F4-LER')].
+        In this case, each `channel` in the list is a tuple of channel names.
+        The second to the last channels will be renamed to the first channel.
+    """
+    flow: Flow = Flow(time_resolution, name=name)
+
+    # Set meta if provided
+    if isinstance(meta, dict): flow.meta.update(meta)
+
+    if verbose: console.show_status('Loading flow ...')
+    for i, sg_label in enumerate(sg_labels):
+      if verbose and i % 10 == 0: console.print_progress(i, len(sg_labels))
+      flow.labels.append(sg_label)
+
+      # Set sleep stages
+      sg: SignalGroup = io.load_file(sg_file_path_list[i], verbose=True)
+      # TODO: DEFAULT_STAGE_KEY comes out of nowhere
+      DEFAULT_STAGE_KEY = 'stage Ground-Truth'
+      if DEFAULT_STAGE_KEY not in sg.annotations:
+        console.warning(f'`{DEFAULT_STAGE_KEY}` not found in annotations of'
+                        f' signal group `{sg.label}`')
+      else:
+        anno: Annotation = sg.annotations[DEFAULT_STAGE_KEY]
+        flow.stages[sg_label] = []
+        for sk, (t1, t2) in zip(anno.annotations, anno.intervals):
+          flow.stages[sg_label].extend([sk] * int((t2 - t1) / time_resolution))
+        del anno
+      del sg
+
+      # Fill-in data_dict
+      for channel in channels:
+        # Case (2)
+        if isinstance(channel, (tuple, list)):
+          channel, aliases = channel[0], channel[1:]
+        else:
+          assert isinstance(channel, str), f'Invalid channel: {channel}'
+          channel, aliases = channel, [channel]
+
+        # Add channel keys to Nebula if has not registered yet
+        if channel not in flow.channels:
+          flow.channels.append(channel)
+
+        for probe_key in probe_keys:
+          if probe_key not in flow.probe_keys:
+            flow.probe_keys.append(probe_key)
+
+          # Load clouds
+          assert isinstance(aliases, (list, tuple))
+          flow_path, b_exist = self._check_hierarchy(
+            sg_label, channel=aliases, time_resolution=time_resolution,
+            feature_name=probe_key, create_if_not_exist=False, extension='traj')
+
+          assert b_exist, f'`{flow_path}` not found.'
+          traj = io.load_file(flow_path)
+          if sg_label in flow.stages:
+            if len(traj) != len(flow.stages[sg_label]):
+              # TODO currently only allow longer stages
+              console.warning(
+                f'Length mismatch for trajectory `{flow_path}`: '
+                f'{len(traj)} vs. {len(flow.stages[sg_label])}. '
+                f'Truncating to match trajectory length.'
+              )
+
+              tol = 30 / time_resolution
+              assert 0 < len(flow.stages[sg_label]) - len(traj) <= tol
+              flow.stages[sg_label] = flow.stages[sg_label][:len(traj)]
+
+            # assert len(traj) == len(flow.stages[sg_label]), (
+            #   f'Length mismatch for trajectory `{flow_path}`: '
+            #   f'{len(traj)} vs. {len(flow.stages[sg_label])}'
+            # )
+          flow.data_dict[(sg_label, channel, probe_key)] = traj
+
+    if verbose:
+      console.show_status(f'Loaded flow from {len(sg_labels)} PSG records.')
+
+    return flow
 
   def get_sampling_frequency(self, sg_path: str, pattern: str, channels: list):
     """Get sampling frequency from the first signal group file in the

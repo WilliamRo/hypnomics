@@ -219,7 +219,8 @@ class Freud(FileManager):
 
   def generate_clouds(self, sg_path: str, pattern: str, channels: list,
                       time_resolutions: list, extractor_dict: dict=None,
-                      overwrite=False, sg_file_list=None, **kwargs):
+                      overwrite=False, sg_file_list=None, traj=False,
+                      **kwargs):
     """Generate clouds from signal group and save in a hierarchy structure."""
     # (0) Get configurations
     CHANNEL_SHOULD_EXIST = kwargs.get('channel_should_exist', True)
@@ -227,9 +228,10 @@ class Freud(FileManager):
     PARA_CHANNEL = kwargs.get('parallel_channel', False)
     # SG_PARA_N = kwargs.get('sg_para_number', 1)
 
+    # (0.1) Find sg files to process
     def sg_filter(_path=None, _sg_label=None):
       return not self._check_cloud(_path, _sg_label, channels, time_resolutions,
-                                   extractor_dict)
+                                   extractor_dict, traj=traj)
 
     if sg_file_list is None:
       sg_file_list = finder.walk(sg_path, pattern=pattern)
@@ -241,6 +243,7 @@ class Freud(FileManager):
       sg_file_list = [path for path in sg_file_list if sg_filter(path)]
 
     # Return sg_file_list if required
+    # This is for checking which files need to be processed in large scale jobs
     if kwargs.get('return_sg_file_list', False):
       return sg_file_list, n_all_files
 
@@ -260,7 +263,7 @@ class Freud(FileManager):
         sg=sg, channels=channels, time_resolutions=time_resolutions,
         extractor_dict=extractor_dict, overwrite=overwrite,
         SKIP_INVALID=SKIP_INVALID, CHANNEL_SHOULD_EXIST=CHANNEL_SHOULD_EXIST,
-        PARA_CHANNEL=PARA_CHANNEL)
+        PARA_CHANNEL=PARA_CHANNEL, traj=traj)
 
       # Clear buffer
       _BUFFER.clear()
@@ -270,6 +273,14 @@ class Freud(FileManager):
 
       # Trigger garbage collection
       gc.collect()
+
+
+  def generate_trajs(self, sg_path: str, pattern: str, channels: list,
+                     time_resolutions: list, extractor_dict: dict=None,
+                     overwrite=False, sg_file_list=None, **kwargs):
+    self.generate_clouds(sg_path, pattern, channels, time_resolutions,
+                         extractor_dict, overwrite=overwrite,
+                         sg_file_list=sg_file_list, traj=True, **kwargs)
 
 
   def _generate_bandpass_filtered_data(self, sg: SignalGroup, channels, bands,
@@ -293,7 +304,7 @@ class Freud(FileManager):
 
   def _generate_clouds_in_sg(self, sg: SignalGroup, channels, time_resolutions,
                              extractor_dict, overwrite, SKIP_INVALID,
-                             CHANNEL_SHOULD_EXIST, PARA_CHANNEL):
+                             CHANNEL_SHOULD_EXIST, PARA_CHANNEL, traj=False):
 
     # Define a function to generate clouds in a channel
     def generate_clouds_in_channel(channel, progress=True):
@@ -306,7 +317,7 @@ class Freud(FileManager):
         if 30 % tr != 0: raise NotImplementedError(
           "!! Time resolution should be a factor of 30 !!")
 
-        # This is to save processing time if clouds have already been saved
+        # This is to save processing time if clouds/traj have already been saved
         segments = None
 
         # (tr-pk) Extract clouds using specified extractors
@@ -320,7 +331,8 @@ class Freud(FileManager):
             cloud_path, b_exist = self._check_hierarchy(
               sg.label, channel=channel, time_resolution=tr,
               feature_name=pk, create_if_not_exist=True,
-              return_false_if_not_exist=True)
+              return_false_if_not_exist=True,
+              extension='traj' if traj else 'clouds')  # WORKAROUND
             cloud_path_list.append(cloud_path)
             b_exist_list.append(b_exist)
 
@@ -329,47 +341,72 @@ class Freud(FileManager):
           if progress: console.print_progress()
 
           # (2) Initialize segments if necessary
+          # TODO: the bifurcation between cloud and traj begins here
           if segments is None:
-            segments = get_sg_stage_epoch_dict(sg, DEFAULT_STAGE_KEY, tr)
+            if traj:
+              # For traj, directly extract epochs
+              # segments = [epoch_1, ...], epoch_i.shape = [L, C]
+              segments = sg.convert_to_epochs(tr, [channel])
+            else:
+              # For clouds, extract stage-wise epochs
+              # segments = {'W': list_0, 'N1': list_1, ..., 'R': list_4}
+              segments = get_sg_stage_epoch_dict(sg, DEFAULT_STAGE_KEY, tr)
 
           # (3) Generate and save clouds
           if isinstance(extractor, ProbeGroup):
             # (3.1) If extractor is a ProbeGroup
-            clouds_dict: dict = extractor.generate_clouds(
-              segments, chn_index, sg=sg, tr=tr)
+            if traj:
+              # Note "clouds_dict" is actually traj here
+              clouds_dict = {pk: [] for pk in extractor.probe_keys}
+              for array in segments:
+                assert len(array.shape) == 2
+                feature_dict = extractor._generate_feature_dict(
+                  array[:, 0], sg=sg)
+                for pk, value in feature_dict.items():
+                  clouds_dict[pk].append(value)
+            else:
+              clouds_dict: dict = extractor.generate_clouds(
+                segments, chn_index, sg=sg, tr=tr)
 
             for pk, clouds in clouds_dict.items():
               # (3.1.1) Get cloud path
               cloud_path, b_exist = self._check_hierarchy(
                 sg.label, channel=channel, time_resolution=tr,
-                feature_name=pk, create_if_not_exist=True)
+                feature_name=pk, create_if_not_exist=True,
+                extension='traj' if traj else 'clouds')
 
               # (3.1.2) Save clouds
               io.save_file(clouds, cloud_path, verbose=True)
 
           else:
             # (3.2) If extractor is a callable function
-            clouds = OrderedDict()
-
-            do_not_save = False
-            for sk in STAGE_KEYS:
-              # clouds[sk] = [extractor(s[:, chn_index]) for s in segments[sk]]
-              # Sometimes s is float16, causing kurtosis estimation to yield
-              #   nan value.
-              # (3.2.1) Extract a cloud for each stage
-              clouds[sk] = [extractor(s[:, chn_index].astype(np.float32))
-                            for s in segments[sk]]
-
-              if any(np.isnan(clouds[sk])) or any(np.isinf(clouds[sk])):
+            def _check_nan(_data):
+              if any(np.isnan(_data)) or any(np.isinf(_data)):
                 console.warning(
                   f"!! Invalid value detected in {sg.label}-{channel}-{feature_key} !!")
-                if SKIP_INVALID:
+                if SKIP_INVALID: return True
+              return False
+
+            if traj:
+              do_not_save = False
+              clouds = [extractor(s[:, 0]) for s in segments]
+              if _check_nan(clouds): do_not_save = True
+
+            else:
+              do_not_save = False
+              for sk in STAGE_KEYS:
+                # clouds[sk] = [extractor(s[:, chn_index]) for s in segments[sk]]
+                # Sometimes s is float16, causing kurtosis estimation to yield
+                #   nan value.
+                # (3.2.1) Extract a cloud for each stage
+                clouds = OrderedDict()
+                clouds[sk] = [extractor(s[:, chn_index].astype(np.float32))
+                              for s in segments[sk]]
+
+                if _check_nan(clouds[sk]):
                   do_not_save = True
                   continue
-                else:
-                  # TODO: currently let downstream handle the NaN issue
-                  pass
-                  # raise ValueError('!! Invalid value detected !!')
+            # TODO: the bifurcation between cloud and traj ends here
 
             # (3.2.3) Save clouds
             assert len(cloud_path_list) == 1

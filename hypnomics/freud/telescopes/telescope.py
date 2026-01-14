@@ -12,12 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # =-===========================================================================-
+from typing import Union
 from pictor import Pictor
+from hypnomics.freud.flow import Flow
 from hypnomics.freud.nebula import Nebula
 
 from .aristotle import Aristotle
 from .galileo import Galileo
 from .hans import Hans
+from .poincare import Poincare
 
 
 
@@ -27,7 +30,7 @@ class Telescope(Pictor):
     CHANNELS = 'ChAnNeLs'
     PROBES = 'PrObEs'
 
-  def __init__(self, nebula: Nebula, x_key: str, y_key: str,
+  def __init__(self, nebula: Union[Nebula, Flow], x_key: str, y_key: str,
                title='Telescope', figure_size=(10, 6),
                plotters=('Hans', 'Galileo'), meta_keys=(), **kwargs):
     # Call parent's constructor
@@ -40,22 +43,33 @@ class Telescope(Pictor):
     self.meta_keys = meta_keys
 
     # Add plotter
-    if isinstance(plotters, str):
-      _plotters = []
-      if 'H' in plotters: _plotters.append('Hans')
-      if 'G' in plotters: _plotters.append('Galileo')
-      if 'A' in plotters: _plotters.append('Aristotle')
-      plotters = _plotters
+    if self.is_dynamic:
+      if isinstance(plotters, str):
+        _plotters = []
+        if 'P' in plotters: _plotters.append('Poincare')
+        plotters = _plotters
+    else:
+      if isinstance(plotters, str):
+        _plotters = []
+        if 'H' in plotters: _plotters.append('Hans')
+        if 'G' in plotters: _plotters.append('Galileo')
+        if 'A' in plotters: _plotters.append('Aristotle')
+        plotters = _plotters
 
     for plotter_key in plotters:
       plotter_class = {
-        'Hans': Hans, 'Galileo': Galileo, 'Aristotle': Aristotle}[plotter_key]
+        'Poincare': Poincare,
+        'Hans': Hans, 'Galileo': Galileo, 'Aristotle': Aristotle,
+      }[plotter_key]
       self.add_plotter(plotter_class(self))
 
     # Set kwargs
     self.kwargs = kwargs
 
   # region: Properties
+
+  @property
+  def is_dynamic(self) -> bool: return isinstance(self.nebula, Flow)
 
   @property
   def selected_clouds(self): return self.get_element(self.Keys.OBJECTS)
@@ -128,8 +142,12 @@ class Telescope(Pictor):
     """Save nebula to file"""
     import tkinter as tk
 
-    file_path = tk.filedialog.asksaveasfilename(
-      title='Save as', filetypes=[('NEBULA files', '*.nebula')])
+    if self.is_dynamic:
+      file_path = tk.filedialog.asksaveasfilename(
+        title='Save as', filetypes=[('FLOW files', '*.flow')])
+    else:
+      file_path = tk.filedialog.asksaveasfilename(
+        title='Save as', filetypes=[('NEBULA files', '*.nebula')])
     if file_path is not None: self.nebula.save(file_path)
 
   def set_key(self, key: str, axis: int = 0):

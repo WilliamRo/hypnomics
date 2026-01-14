@@ -117,7 +117,7 @@ class PowerProbes(ProbeGroup):
     if log: self.probe_keys = [
       'L' + pk if pk != 'POWER-30' else pk for pk in self.probe_keys]
 
-  def _generate_feature_dict(self, array) -> dict:
+  def _generate_feature_dict(self, array, **kwargs) -> dict:
     power_dict = estimate_power(array, self.fs, band='*',
                                 method=self.default_method)
     feature_dict = OrderedDict()

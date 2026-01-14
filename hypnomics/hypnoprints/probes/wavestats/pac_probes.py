@@ -158,3 +158,43 @@ class PAC_MI(ProbeGroup):
 
     # (-1) Return
     return clouds_dict
+
+
+  _DEFAULT_BAND_RANGE = {
+    'delta_low': (0.1, 1.5),
+    'delta_high': (1.5, 4),
+    'theta': (4, 8),
+    'alpha': (8, 12),
+    'beta_low': (12, 20),
+    'beta_high': (20, 30),
+  }
+
+  def _generate_feature_dict(self, array, sg=None) -> dict:
+    from pictor.objects.signals.eeg import SignalGroup
+
+    assert len(self.probe_keys) > 0
+    assert isinstance(sg, SignalGroup)
+    sfreq = sg.digital_signals[0].sfreq
+
+    # (1) Initialization
+    feature_dict = OrderedDict()
+
+    se_dict = OrderedDict()
+    for band in self.band_keys:
+      low, high = self._DEFAULT_BAND_RANGE[band]
+      se_dict[band] = SignalGroup.extract_component(
+        array, sfreq, low, high)
+
+    for i in range(len(self.band_keys) - 1):
+      phase_key = self.band_keys[i]
+      for j in range(i + 1, len(self.band_keys)):
+        amp_key = self.band_keys[j]
+
+        key = f'TMI-{phase_key.upper()}-{amp_key.upper()}'
+        low_s, high_s = se_dict[phase_key], se_dict[amp_key]
+        mi = self.calc_tort_2010_mi(low_s, high_s)
+        feature_dict[key] = mi
+
+    # Check and return
+    assert len(feature_dict) == len(self.probe_keys)
+    return feature_dict

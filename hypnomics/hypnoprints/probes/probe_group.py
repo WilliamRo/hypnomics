@@ -55,7 +55,7 @@ class ProbeGroup(Nomear):
     return clouds_dict
 
 
-  def _generate_feature_dict(self, array) -> dict:
+  def _generate_feature_dict(self, array, **kwargs) -> dict:
     raise NotImplementedError
 
 

@@ -28,8 +28,6 @@ class Nebula(Nomear):
       (clouds_label, channel, probe_key):
       {'W': [...], 'N1': [...], 'N2': [...], 'N3': [...], 'R': [...]}
     }
-
-    Nebula.
   """
 
   # STAGE_KEYS = ('W', 'N1', 'N2', 'N3', 'R')
