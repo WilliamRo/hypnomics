@@ -126,6 +126,8 @@ class Flow(Nomear):
         meta_info = self.meta.get(traj_label, {})
         meta_df = pd.DataFrame(list(meta_info.items()),
                                columns=['meta_key', 'meta_value'])
+        # Drop 'name'
+        meta_df = meta_df[meta_df['meta_key'] != 'name']
 
         # Write to Excel file with two sheets
         file_path = os.path.join(channel_dir, f'{traj_label}.xlsx')

@@ -300,13 +300,15 @@ class FileManager(Nomear):
               # TODO currently only allow longer stages
               console.warning(
                 f'Length mismatch for trajectory `{flow_path}`: '
-                f'{len(traj)} vs. {len(flow.stages[sg_label])}. '
-                f'Truncating to match trajectory length.'
+                f'len(traj)={len(traj)} vs. len(stages){len(flow.stages[sg_label])}. '
+                f'Truncating longer list to match.'
               )
 
               tol = 30 / time_resolution
-              assert 0 < len(flow.stages[sg_label]) - len(traj) <= tol
-              flow.stages[sg_label] = flow.stages[sg_label][:len(traj)]
+              assert 0 < abs(len(flow.stages[sg_label]) - len(traj)) <= tol
+              min_L = min(len(traj), len(flow.stages[sg_label]))
+              traj = traj[:min_L]
+              flow.stages[sg_label] = flow.stages[sg_label][:min_L]
 
             # assert len(traj) == len(flow.stages[sg_label]), (
             #   f'Length mismatch for trajectory `{flow_path}`: '

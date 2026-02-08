@@ -394,12 +394,12 @@ class Freud(FileManager):
 
             else:
               do_not_save = False
+              clouds = OrderedDict()
               for sk in STAGE_KEYS:
                 # clouds[sk] = [extractor(s[:, chn_index]) for s in segments[sk]]
                 # Sometimes s is float16, causing kurtosis estimation to yield
                 #   nan value.
                 # (3.2.1) Extract a cloud for each stage
-                clouds = OrderedDict()
                 clouds[sk] = [extractor(s[:, chn_index].astype(np.float32))
                               for s in segments[sk]]
 
