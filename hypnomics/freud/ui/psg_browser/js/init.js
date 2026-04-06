@@ -117,6 +117,7 @@ async function loadFile(arrayBuffer, opts = {}) {
       markOut = opts.markOut ?? null;
       fixedYmax = opts.fixedYmax ? { ...opts.fixedYmax } : {};
       currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), opts.epoch ?? 0));
+      viewStartSec = currentEpoch * 30;
     } else {
       markIn = null;
       markOut = null;
@@ -127,6 +128,7 @@ async function loadFile(arrayBuffer, opts = {}) {
       } else {
         currentEpoch = 0;
       }
+      viewStartSec = currentEpoch * 30;
     }
     undoStack.length = 0;
     redoStack.length = 0;

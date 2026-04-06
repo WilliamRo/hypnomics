@@ -26,14 +26,23 @@ function scheduleEpochRender() {
   }
 }
 
+function snapViewStart(t) {
+  // Snap to nearest multiple of fastWindowSec
+  const snapped = Math.floor(t / fastWindowSec) * fastWindowSec;
+  const minT = visibleStart() * 30;
+  const maxT = (visibleEnd() + 1) * 30 - fastWindowSec;
+  viewStartSec = Math.max(minT, Math.min(maxT, snapped));
+  currentEpoch = Math.floor(viewStartSec / 30);
+}
+
 function navigate(delta) {
-  currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), currentEpoch + delta));
+  snapViewStart(viewStartSec + delta * fastWindowSec);
   scheduleEpochRender();
   saveCurrentFileState();
 }
 
 function navigateToTime(seconds) {
-  currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), Math.floor(seconds / 30)));
+  snapViewStart(seconds);
   scheduleEpochRender();
 }
 
@@ -52,8 +61,8 @@ function updateEpochInfo() {
       }
     }
   }
-  epochInfo.innerHTML = `Epoch <span>${currentEpoch + 1}</span> / ${totalEpochs} | ${formatTime(t)}${stageStr}`;
-  hypnoTime.textContent = formatTime(t) + ' - ' + formatTime(t + 30);
+  epochInfo.innerHTML = `Epoch <span>${currentEpoch + 1}</span> / ${totalEpochs} | ${formatTime(viewStartSec)} [${fastWindowSec}s]${stageStr}`;
+  hypnoTime.textContent = formatTime(viewStartSec) + ' - ' + formatTime(viewStartSec + fastWindowSec);
 }
 
 // --- Apply theme on load ---
@@ -67,7 +76,20 @@ document.getElementById('configBtn').onclick = () => {
 // --- Theme toggle ---
 document.getElementById('themeToggle').onclick = () => {
   applyTheme(!darkMode);
+  prevLabelKey = ''; // force label rebuild with new colors
   buildChannelToggles();
+  drawHypnogram();
+  drawWaveforms();
+};
+
+// --- Fast window selector ---
+const fastSelect = document.getElementById('fastWindowSelect');
+fastSelect.value = fastWindowSec;
+fastSelect.onchange = () => {
+  fastWindowSec = parseInt(fastSelect.value);
+  snapViewStart(viewStartSec);
+  saveSettings({ fastWindowSec });
+  clearEpochCache();
   drawHypnogram();
   drawWaveforms();
 };
@@ -304,8 +326,23 @@ document.addEventListener('mouseup', () => {
 // --- Wheel scroll on signal panel ---
 document.getElementById('waveformWrap').addEventListener('wheel', (e) => {
   e.preventDefault();
-  const delta = e.deltaY > 0 ? 1 : -1;
-  navigate(delta);
+  if (e.shiftKey) {
+    // Shift+wheel: cycle fast window duration
+    const dir = e.deltaY > 0 ? -1 : 1;
+    const idx = FAST_WINDOW_OPTIONS.indexOf(fastWindowSec);
+    const newIdx = Math.max(0, Math.min(FAST_WINDOW_OPTIONS.length - 1, idx + dir));
+    if (FAST_WINDOW_OPTIONS[newIdx] !== fastWindowSec) {
+      fastWindowSec = FAST_WINDOW_OPTIONS[newIdx];
+      fastSelect.value = fastWindowSec;
+      snapViewStart(viewStartSec);
+      saveSettings({ fastWindowSec });
+      clearEpochCache();
+      drawHypnogram();
+      drawWaveforms();
+    }
+  } else {
+    navigate(e.deltaY > 0 ? 1 : -1);
+  }
 }, { passive: false });
 
 // --- Gain slider ---

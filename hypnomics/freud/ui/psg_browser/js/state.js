@@ -129,6 +129,7 @@ let channels = [];
 let activeChannels = [];
 let annotations = null;
 let currentEpoch = 0;
+let viewStartSec = 0; // precise start time for fast view
 let totalEpochs = 0;
 const savedSettings = loadSettings();
 let gain = savedSettings.gain ?? 20;
@@ -144,7 +145,10 @@ let fixedYmax = {};  // e.g., { EEG_EOG: 75.0 }
 
 // Data cache: avoids re-reading HDF5 on every redraw
 const epochCache = {}; // { "chName:epoch": { data, mean, std } }
-function clearEpochCache() { for (const k in epochCache) delete epochCache[k]; }
+function clearEpochCache() {
+  for (const k in epochCache) delete epochCache[k];
+  _slowCacheKey = ''; // invalidate slow render cache
+}
 
 // Undo/Redo
 const undoStack = [];
@@ -160,6 +164,7 @@ function undo() {
   markIn = state.markIn;
   markOut = state.markOut;
   currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), currentEpoch));
+  viewStartSec = currentEpoch * 30;
   drawHypnogram(); drawWaveforms(); updateEpochInfo();
 }
 function redo() {
@@ -169,6 +174,7 @@ function redo() {
   markIn = state.markIn;
   markOut = state.markOut;
   currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), currentEpoch));
+  viewStartSec = currentEpoch * 30;
   drawHypnogram(); drawWaveforms(); updateEpochInfo();
 }
 let h5Ready = false;
@@ -213,6 +219,7 @@ function applyTheme(dark) {
   const root = document.documentElement;
   for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
   document.getElementById('themeToggle').textContent = dark ? '\uD83C\uDF1A' : '\uD83C\uDF1D';
+  document.getElementById('themeModeLabel').textContent = dark ? 'Dark Mode' : 'Light Mode';
   document.querySelector('link[rel="icon"]').href =
     "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>" +
     (dark ? '\uD83C\uDF18' : '\uD83C\uDF16') + "</text></svg>";
@@ -220,8 +227,10 @@ function applyTheme(dark) {
   saveSettings({ darkMode: dark });
 }
 
-// Slow channel window duration in seconds
-let slowWindowSec = savedSettings.slowWindowSec ?? 300; // default 5 min
+// Window durations
+const FAST_WINDOW_OPTIONS = [5, 10, 15, 30];
+let fastWindowSec = savedSettings.fastWindowSec ?? 30;
+let slowWindowSec = savedSettings.slowWindowSec ?? 300;
 
 // Font size adjust: +/- 1px on all text elements
 let fontDelta = savedSettings.fontDelta ?? 0;

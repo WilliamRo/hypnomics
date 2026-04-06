@@ -13,7 +13,7 @@ function buildChannelToggles() {
   const slowChs = sorted.filter(ch => getSignalSpeed(ch.name) === 'slow');
 
   const sections = [];
-  if (fastChs.length > 0) sections.push({ label: 'FAST (30s)', chs: fastChs });
+  if (fastChs.length > 0) sections.push({ label: `FAST (${fastWindowSec}s)`, chs: fastChs });
   if (slowChs.length > 0) sections.push({ label: `SLOW (${slowWindowSec >= 60 ? (slowWindowSec/60)+'min' : slowWindowSec+'s'})`, chs: slowChs });
 
   sections.forEach((section, si) => {

@@ -2,6 +2,11 @@
 // waveforms.js — Waveform grid, traces, and main draw routine
 // =============================================================================
 
+// Slow render cache
+let _slowCacheKey = '';
+let _slowOffscreen = null;
+let _slowLabelCache = null;
+
 // Shared: draw grid on a canvas
 function drawGrid(ctx, w, h, nCh, chHeight, tDuration, gridBase) {
   ctx.strokeStyle = `rgba(${gridBase},0.06)`;
@@ -34,10 +39,32 @@ function drawTraces(ctx, w, chDataList, chHeight, gainFactor, groupStdMax) {
     ctx.strokeStyle = d.color;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-    for (let i = 0; i < d.data.length; i++) {
-      const x = (i / d.numSamples) * w;
-      const y = yCenter - (d.data[i] - d.mean) * pxPerUnit;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+
+    const nSamples = d.data.length;
+    if (nSamples <= w * 2) {
+      // Few samples — draw all points
+      for (let i = 0; i < nSamples; i++) {
+        const x = (i / d.numSamples) * w;
+        const y = yCenter - (d.data[i] - d.mean) * pxPerUnit;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+    } else {
+      // Downsample: min/max per pixel column preserves peaks
+      const samplesPerPx = nSamples / w;
+      for (let px = 0; px < w; px++) {
+        const start = Math.floor(px * samplesPerPx);
+        const end = Math.min(Math.floor((px + 1) * samplesPerPx), nSamples);
+        let mn = d.data[start], mx = d.data[start];
+        for (let j = start + 1; j < end; j++) {
+          const v = d.data[j];
+          if (v < mn) mn = v;
+          if (v > mx) mx = v;
+        }
+        const yMin = yCenter - (mx - d.mean) * pxPerUnit;
+        const yMax = yCenter - (mn - d.mean) * pxPerUnit;
+        if (px === 0) ctx.moveTo(px, yMin); else ctx.lineTo(px, yMin);
+        ctx.lineTo(px, yMax);
+      }
     }
     ctx.stroke();
 
@@ -90,7 +117,7 @@ function drawWaveforms() {
   const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-waveform').trim();
   const gridBase = darkMode ? '255,255,255' : '0,0,0';
   const gainFactor = gain / 50;
-  const epochStart = currentEpoch * 30;
+  const epochStart = viewStartSec;
 
   let allLabelData = [];
 
@@ -102,9 +129,9 @@ function drawWaveforms() {
     ctx.fillRect(0, 0, w, h);
 
     const chHeight = h / fastChs.length;
-    drawGrid(ctx, w, h, fastChs.length, chHeight, 30, gridBase);
+    drawGrid(ctx, w, h, fastChs.length, chHeight, fastWindowSec, gridBase);
 
-    const fastData = fastChs.map(n => readChannelData(n, epochStart, 30)).filter(Boolean);
+    const fastData = fastChs.map(n => readChannelData(n, epochStart, fastWindowSec)).filter(Boolean);
     const groupStdMax = {};
     fastData.forEach(d => {
       const g = getYmaxGroup(d.chName);
@@ -118,8 +145,9 @@ function drawWaveforms() {
     const timeColor = darkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.25)';
     ctx.fillStyle = timeColor;
     ctx.font = '9px "JetBrains Mono", monospace';
-    for (let s = 0; s <= 30; s += 5) {
-      ctx.fillText(formatTime(epochStart + s), (s / 30) * w + 2, h - 4);
+    const fastTickInt = fastWindowSec <= 5 ? 1 : fastWindowSec <= 15 ? 2 : 5;
+    for (let s = 0; s <= fastWindowSec; s += fastTickInt) {
+      ctx.fillText(formatTime(epochStart + s), (s / fastWindowSec) * w + 2, h - 4);
     }
   } else {
     const ctx = waveformCanvas.getContext('2d');
@@ -128,53 +156,88 @@ function drawWaveforms() {
   }
 
   // --- Slow channels ---
+  // Slow trace cache: only re-render traces when the slow window shifts
   if (hasSlow) {
     const ctx = slowCanvas.getContext('2d');
     const w = slowCanvas.width, h = slowCanvas.height;
-    ctx.fillStyle = bgColor;
-    ctx.fillRect(0, 0, w, h);
 
-    // Slow window centered on current epoch
+    // Compute slow window
+    const epochMid = currentEpoch * 30 + 15;
     const slowHalf = slowWindowSec / 2;
-    let slowStart = epochStart + 15 - slowHalf; // center of current epoch
+    let slowStart = epochMid - slowHalf;
     let slowEnd = slowStart + slowWindowSec;
     if (slowStart < 0) { slowStart = 0; slowEnd = slowWindowSec; }
     if (slowEnd > duration) { slowEnd = duration; slowStart = Math.max(0, slowEnd - slowWindowSec); }
 
-    const chHeight = h / slowChs.length;
-    drawGrid(ctx, w, h, slowChs.length, chHeight, slowWindowSec, gridBase);
+    // Cache key for slow traces
+    const slowKey = `${slowStart}:${slowWindowSec}:${w}:${h}:${slowChs.join(',')}:${gainFactor}:${darkMode}`;
+    let slowLabelData;
 
-    const slowData = slowChs.map(n => readChannelData(n, slowStart, slowWindowSec)).filter(Boolean);
-    const groupStdMax = {};
-    slowData.forEach(d => {
-      const g = getYmaxGroup(d.chName);
-      groupStdMax[g] = Math.max(groupStdMax[g] || 0, d.std);
-    });
+    if (slowKey !== _slowCacheKey) {
+      // Expensive: re-render traces to offscreen canvas
+      _slowCacheKey = slowKey;
+      if (!_slowOffscreen || _slowOffscreen.width !== w || _slowOffscreen.height !== h) {
+        _slowOffscreen = document.createElement('canvas');
+        _slowOffscreen.width = w;
+        _slowOffscreen.height = h;
+      }
+      const oCtx = _slowOffscreen.getContext('2d');
+      oCtx.fillStyle = bgColor;
+      oCtx.fillRect(0, 0, w, h);
 
-    const labelData = drawTraces(ctx, w, slowData, chHeight, gainFactor, groupStdMax);
-    allLabelData.push(...labelData);
+      const chHeight = h / slowChs.length;
+      drawGrid(oCtx, w, h, slowChs.length, chHeight, slowWindowSec, gridBase);
 
-    // Cursor bracket: current 30s epoch in slow view
-    const cursorX0 = ((epochStart - slowStart) / slowWindowSec) * w;
-    const cursorX1 = ((epochStart + 30 - slowStart) / slowWindowSec) * w;
+      const slowData = slowChs.map(n => readChannelData(n, slowStart, slowWindowSec)).filter(Boolean);
+      const groupStdMax = {};
+      slowData.forEach(d => {
+        const g = getYmaxGroup(d.chName);
+        groupStdMax[g] = Math.max(groupStdMax[g] || 0, d.std);
+      });
+
+      _slowLabelCache = drawTraces(oCtx, w, slowData, chHeight, gainFactor, groupStdMax);
+
+      // Time axis
+      const timeColor = darkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.25)';
+      oCtx.fillStyle = timeColor;
+      oCtx.font = '9px "JetBrains Mono", monospace';
+      const tickInt = slowWindowSec <= 120 ? 10 : slowWindowSec <= 300 ? 30 : 60;
+      const firstTick = Math.ceil(slowStart / tickInt) * tickInt;
+      for (let t = firstTick; t <= slowEnd; t += tickInt) {
+        const x = ((t - slowStart) / slowWindowSec) * w;
+        oCtx.fillText(formatTime(t), x + 2, h - 4);
+      }
+    }
+    slowLabelData = _slowLabelCache || [];
+    allLabelData.push(...slowLabelData);
+
+    // Cheap: blit cached traces + draw cursor overlay
+    ctx.drawImage(_slowOffscreen, 0, 0);
+
+    // Cursor: 30s epoch bracket
+    const epoch30Start = currentEpoch * 30;
+    const outerX0 = ((epoch30Start - slowStart) / slowWindowSec) * w;
+    const outerX1 = ((epoch30Start + 30 - slowStart) / slowWindowSec) * w;
+
     ctx.fillStyle = darkMode ? 'rgba(251,146,60,0.08)' : 'rgba(251,146,60,0.1)';
-    ctx.fillRect(cursorX0, 0, cursorX1 - cursorX0, h);
-    ctx.strokeStyle = 'rgba(251,146,60,0.7)';
-    ctx.lineWidth = 1.5;
+    ctx.fillRect(outerX0, 0, outerX1 - outerX0, h);
+    ctx.strokeStyle = 'rgba(251,146,60,0.5)';
+    ctx.lineWidth = 1;
     ctx.setLineDash([4, 3]);
-    ctx.beginPath(); ctx.moveTo(cursorX0, 0); ctx.lineTo(cursorX0, h); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(cursorX1, 0); ctx.lineTo(cursorX1, h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(outerX0, 0); ctx.lineTo(outerX0, h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(outerX1, 0); ctx.lineTo(outerX1, h); ctx.stroke();
     ctx.setLineDash([]);
 
-    // Time axis for slow
-    const timeColor = darkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.25)';
-    ctx.fillStyle = timeColor;
-    ctx.font = '9px "JetBrains Mono", monospace';
-    const tickInt = slowWindowSec <= 120 ? 10 : slowWindowSec <= 300 ? 30 : 60;
-    const firstTick = Math.ceil(slowStart / tickInt) * tickInt;
-    for (let t = firstTick; t <= slowEnd; t += tickInt) {
-      const x = ((t - slowStart) / slowWindowSec) * w;
-      ctx.fillText(formatTime(t), x + 2, h - 4);
+    // Nested fast window (only when zoomed in)
+    if (fastWindowSec < 30) {
+      const innerX0 = ((epochStart - slowStart) / slowWindowSec) * w;
+      const innerX1 = ((epochStart + fastWindowSec - slowStart) / slowWindowSec) * w;
+      ctx.fillStyle = darkMode ? 'rgba(251,146,60,0.12)' : 'rgba(251,146,60,0.15)';
+      ctx.fillRect(innerX0, 0, innerX1 - innerX0, h);
+      ctx.strokeStyle = 'rgba(251,146,60,0.7)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(innerX0, 0); ctx.lineTo(innerX0, h); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(innerX1, 0); ctx.lineTo(innerX1, h); ctx.stroke();
     }
   }
 
