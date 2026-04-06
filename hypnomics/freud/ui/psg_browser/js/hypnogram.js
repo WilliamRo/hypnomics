@@ -57,12 +57,17 @@ function drawHypnogram() {
     const y = stageYFromRow(row);
 
     ctx.strokeStyle = color;
+    ctx.lineWidth = (row === 1) ? 7.5 : 1.5; // REM (row 1) is 5x thicker
     ctx.beginPath();
 
     // Vertical transition from previous known stage
     if (prevDrawnRow !== null && prevDrawnRow !== row && t0 >= tStart) {
+      ctx.lineWidth = 1.5; // transitions stay thin
       ctx.moveTo(x0, stageYFromRow(prevDrawnRow));
       ctx.lineTo(x0, y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.lineWidth = (row === 1) ? 7.5 : 1.5;
     }
 
     ctx.moveTo(x0, y);

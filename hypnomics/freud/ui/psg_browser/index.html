@@ -17,6 +17,8 @@
     <div class="meta" id="fileMeta"></div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
+    <button class="btn" id="stageModeBtn" style="display:none;padding:4px 10px;font-size:11px;font-family:'JetBrains Mono',monospace" title="Toggle stage annotation mode">✏ Stage</button>
+    <select id="annoSelect" class="btn" style="display:none;font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 8px;max-width:200px"></select>
     <button class="btn" id="openBtn">Open .psg.h5</button>
     <input type="file" id="fileInput" accept=".h5,.hdf5,.psg.h5">
     <button class="btn" id="configBtn" title="Settings" style="padding:6px 10px;font-size:16px">⚙</button>
@@ -143,6 +145,8 @@
     <tr><td>Right-click</td><td>Mark In / Mark Out</td></tr>
     <tr><td colspan="2" style="color:var(--text-dim);font-size:10px;padding:8px 0 2px">SIGNALS</td></tr>
     <tr><td>Dbl-click</td><td>Fix/unfix group ymax</td></tr>
+    <tr><td colspan="2" style="color:var(--text-dim);font-size:10px;padding:8px 0 2px">ANNOTATION</td></tr>
+    <tr><td>w/1/2/3/r/0</td><td>Set stage (W/N1/N2/N3/R/?)</td></tr>
     <tr><td colspan="2" style="color:var(--text-dim);font-size:10px;padding:8px 0 2px">GENERAL</td></tr>
     <tr><td>Ctrl+Z</td><td>Undo mark</td></tr>
     <tr><td>Ctrl+Shift+Z</td><td>Redo mark</td></tr>
@@ -185,6 +189,7 @@
 <script src="js/waveforms.js"></script>
 <script src="js/labels.js"></script>
 <script src="js/panels.js"></script>
+<script src="js/annotations.js"></script>
 <script src="js/events.js"></script>
 <script src="js/init.js"></script>
 </body>

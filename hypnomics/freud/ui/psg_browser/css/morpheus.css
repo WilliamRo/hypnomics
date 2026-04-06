@@ -272,6 +272,22 @@ input[type="file"] { display: none; }
   padding: 16px 20px; font-family: 'JetBrains Mono', monospace; font-size: 12px;
   color: var(--text); z-index: 200; min-width: 240px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
 }
+/* Stage mode button */
+#stageModeBtn.active { border-color: #fb923c; color: #fb923c; background: rgba(251,146,60,0.1); }
+
+/* Annotation indicator */
+.anno-badge {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 4px;
+}
+.anno-badge.modified { background: rgba(251,146,60,0.2); color: #fb923c; }
+.anno-badge.readonly { background: rgba(100,116,139,0.15); color: var(--text-dim); }
+
 .help-panel.active { display: block; }
 .help-panel h3 { margin: 0 0 10px 0; font-size: 13px; color: var(--accent); font-weight: 500; }
 .help-panel table { width: 100%; border-collapse: collapse; }

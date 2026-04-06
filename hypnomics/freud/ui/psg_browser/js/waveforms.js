@@ -212,7 +212,9 @@ function drawWaveforms() {
     allLabelData.push(...slowLabelData);
 
     // Cheap: blit cached traces + draw cursor overlay
-    ctx.drawImage(_slowOffscreen, 0, 0);
+    if (_slowOffscreen && _slowOffscreen.width > 0 && _slowOffscreen.height > 0) {
+      ctx.drawImage(_slowOffscreen, 0, 0);
+    }
 
     // Cursor: 30s epoch bracket
     const epoch30Start = currentEpoch * 30;
@@ -238,6 +240,54 @@ function drawWaveforms() {
       ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.moveTo(innerX0, 0); ctx.lineTo(innerX0, h); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(innerX1, 0); ctx.lineTo(innerX1, h); ctx.stroke();
+    }
+
+    // Epoch splitters + stage labels across the slow view
+    if (annotations) {
+      const intervals = annotations.intervals;
+      const labels = annotations.labels;
+      ctx.setLineDash([3, 4]);
+      ctx.strokeStyle = darkMode ? 'rgba(251,146,60,0.2)' : 'rgba(251,146,60,0.25)';
+      ctx.lineWidth = 0.5;
+      ctx.font = '9px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+
+      // Draw epoch boundaries and stage labels
+      const firstEpoch = Math.floor(slowStart / 30);
+      const lastEpoch = Math.ceil(slowEnd / 30);
+      for (let ep = firstEpoch; ep <= lastEpoch; ep++) {
+        const epT = ep * 30;
+        const x = ((epT - slowStart) / slowWindowSec) * w;
+
+        // Epoch boundary line
+        if (epT > slowStart && epT < slowEnd) {
+          ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+        }
+
+        // Stage label at top of epoch region
+        if (epT >= slowStart && epT + 30 <= slowEnd) {
+          const midX = ((epT + 15 - slowStart) / slowWindowSec) * w;
+          // Find stage for this epoch
+          for (let i = 0; i < labels.length; i++) {
+            const t0 = intervals[i * 2];
+            const t1 = intervals[i * 2 + 1];
+            if (epT >= t0 && epT < t1) {
+              const sName = stageName(labels[i]);
+              const sColor = stageColor(labels[i]);
+              if (sColor) {
+                ctx.fillStyle = sColor;
+                ctx.globalAlpha = 0.8;
+                ctx.font = '600 18px "DM Sans", sans-serif';
+                ctx.fillText(sName, midX, 16);
+                ctx.globalAlpha = 1;
+                ctx.font = '9px "JetBrains Mono", monospace';
+              }
+              break;
+            }
+          }
+        }
+      }
+      ctx.setLineDash([]);
     }
   }
 

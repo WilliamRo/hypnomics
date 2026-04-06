@@ -56,7 +56,9 @@ function updateEpochInfo() {
       const t0 = intervals[i * 2];
       const t1 = intervals[i * 2 + 1];
       if (t >= t0 && t < t1) {
-        stageStr = ` | ${stageName(labels[i])}`;
+        const sName = stageName(labels[i]);
+        const sColor = stageColor(labels[i]) || '';
+        stageStr = ` | <span style="color:${sColor};font-weight:600">${sName}</span>`;
         break;
       }
     }
@@ -67,6 +69,14 @@ function updateEpochInfo() {
 
 // --- Apply theme on load ---
 applyTheme(darkMode);
+
+// --- Annotation selector ---
+document.getElementById('annoSelect').onchange = (e) => {
+  switchAnnotation(e.target.value);
+};
+
+// --- Stage mode toggle ---
+document.getElementById('stageModeBtn').onclick = () => toggleStageMode();
 
 // --- Config button toggle ---
 document.getElementById('configBtn').onclick = () => {
@@ -274,13 +284,18 @@ document.onkeydown = (e) => {
     return;
   }
 
+  // Annotation shortcuts: w/1/2/3/r/0 (only in stage mode)
+  if (stageMode && ANNO_KEY_MAP[e.key] && !e.ctrlKey && !e.altKey) {
+    annotateCurrentEpoch(ANNO_KEY_MAP[e.key]);
+    return;
+  }
+
   // Font size: +/-
   if (e.key === '=' || e.key === '+') { adjustFontDelta(1); return; }
   if (e.key === '-') { adjustFontDelta(-1); return; }
 
-  // Undo/Redo
+  // Undo/Redo (note: Ctrl+S saves annotation — handled here)
   if (e.key === 'z' && e.ctrlKey && !e.shiftKey) { e.preventDefault(); undo(); return; }
-  if (e.key === 'Z' && e.ctrlKey && e.shiftKey) { e.preventDefault(); redo(); return; }
 
   if (e.key === 'ArrowLeft') navigate(-1);
   if (e.key === 'ArrowRight') navigate(1);

@@ -115,6 +115,7 @@ function onChannelsChanged() {
 // (12) Command palette
 const COMMANDS = [
   { name: 'showh5', hint: 'Show .h5 file structure', fn: cmdShowH5 },
+  { name: 'exportanno', hint: 'Export active annotation as .anno.json', fn: () => exportAnnotation(activeAnnoKey) },
 ];
 
 let cmdBarOpen = false;
@@ -178,13 +179,76 @@ function executeCmdByIndex(filtered) {
 }
 
 // (12.1) showh5 command
-function cmdShowH5() {
+async function cmdShowH5() {
   if (!psgFile) { alert('No file loaded.'); return; }
   const panel = document.getElementById('sidePanel');
   const body = document.getElementById('sidePanelBody');
   document.getElementById('sidePanelTitle').textContent = 'H5 Structure \u2014 ' + (lastFileName || 'unknown');
   body.innerHTML = '';
   body.appendChild(buildH5Tree(psgFile, '/'));
+
+  // Append local annotations under annotations/
+  try {
+    const localKeys = await listLocalAnnoKeys(lastFileName);
+    if (localKeys.length > 0) {
+      const localHeader = document.createElement('div');
+      localHeader.className = 'h5-group open';
+      localHeader.textContent = 'annotations/ (local)';
+      localHeader.style.color = '#fb923c';
+      body.appendChild(localHeader);
+
+      const localNode = document.createElement('div');
+      localNode.className = 'h5-node';
+      for (const key of localKeys) {
+        const anno = await loadLocalAnno(lastFileName, key);
+        if (!anno) continue;
+
+        const grpEl = document.createElement('div');
+        grpEl.className = 'h5-group open';
+        grpEl.textContent = key + '/';
+        grpEl.style.color = '#fb923c';
+        localNode.appendChild(grpEl);
+
+        const details = document.createElement('div');
+        details.className = 'h5-node';
+
+        const labelsEl = document.createElement('div');
+        labelsEl.className = 'h5-dataset';
+        labelsEl.innerHTML = `labels<span class="h5-meta">[${anno.labels.length}] int32</span>`;
+        details.appendChild(labelsEl);
+
+        const intEl = document.createElement('div');
+        intEl.className = 'h5-dataset';
+        intEl.innerHTML = `intervals<span class="h5-meta">[${anno.labels.length}\u00d72] float64</span>`;
+        details.appendChild(intEl);
+
+        if (anno.labelNames) {
+          const attrEl = document.createElement('div');
+          attrEl.className = 'h5-attr';
+          attrEl.textContent = 'label_names: ' + anno.labelNames.join(', ');
+          details.appendChild(attrEl);
+        }
+
+        const modEl = document.createElement('div');
+        modEl.className = 'h5-attr';
+        modEl.style.color = '#fb923c';
+        modEl.textContent = 'modified: true (stored in IDB)';
+        details.appendChild(modEl);
+
+        // Export button
+        const expBtn = document.createElement('button');
+        expBtn.className = 'btn';
+        expBtn.style.cssText = 'margin:4px 0 4px 16px;font-size:9px;padding:2px 8px';
+        expBtn.textContent = '⬇ Export .anno.json';
+        expBtn.onclick = () => exportAnnotation(key);
+        details.appendChild(expBtn);
+
+        localNode.appendChild(details);
+      }
+      body.appendChild(localNode);
+    }
+  } catch(e) { console.warn('Failed to list local annotations:', e); }
+
   panel.classList.add('active');
   if (fontDelta !== 0) applyFontDelta();
 }

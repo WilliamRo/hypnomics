@@ -68,29 +68,31 @@ async function loadFile(arrayBuffer, opts = {}) {
     duration = mainCh.length / mainCh.sfreq;
     totalEpochs = Math.floor(duration / 30);
 
-    // (4.4) Read annotations
+    // (4.4) Read annotations — collect all stage keys
     annotations = null;
+    annoKeys = [];
     try {
       const annoGroup = psgFile.get('annotations');
       if (annoGroup) {
         const keys = annoGroup.keys();
         for (const key of keys) {
-          if (key.startsWith('stage')) {
-            const grp = psgFile.get(`annotations/${key}`);
-            const intervals = psgFile.get(`annotations/${key}/intervals`).value;
-            const labels = psgFile.get(`annotations/${key}/labels`).value;
-            let labelNames = [];
-            try {
-              labelNames = grp.attrs['label_names'].value;
-            } catch(e) {}
-            annotations = { intervals, labels, labelNames, key };
-            buildStageMap(labelNames);
-            updateHypnoYAxis();
-            break;
-          }
+          if (key.startsWith('stage')) annoKeys.push(key);
         }
       }
     } catch(e) { console.warn('No annotations found:', e); }
+
+    // Add local annotation keys
+    try {
+      const localKeys = await listLocalAnnoKeys(opts.fileName || lastFileName);
+      localKeys.forEach(k => { if (!annoKeys.includes(k)) annoKeys.push(k); });
+    } catch(e) {}
+
+    // Load first stage annotation (prefer Ground-Truth)
+    activeAnnoKey = annoKeys.find(k => k.includes('Ground-Truth')) || annoKeys[0] || '';
+    if (activeAnnoKey) {
+      await switchAnnotation(activeAnnoKey);
+    }
+    buildAnnoSelect();
 
     // (4.5) Read metadata
     const label = psgFile.attrs['label']?.value || 'Unknown';
