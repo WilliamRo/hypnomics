@@ -46,6 +46,7 @@
     flex-direction: column;
   }
 
+
   /* Header */
   .header {
     display: flex;
@@ -357,26 +358,83 @@
     accent-color: var(--accent);
   }
 
-  .channel-toggles {
-    display: flex;
-    gap: 6px;
+  /* Channel panel (left side, toggled by c) */
+  .channel-panel {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: var(--ch-panel-width, 200px);
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    z-index: 150;
+    flex-direction: column;
+    box-shadow: 4px 0 20px rgba(0,0,0,0.3);
   }
-
-  .ch-toggle {
+  .channel-panel.active { display: flex; }
+  .ch-panel-resize {
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 4px;
+    cursor: ew-resize;
+    z-index: 10;
+  }
+  .ch-panel-resize:hover { background: var(--accent); opacity: 0.3; }
+  .channel-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .channel-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 6px 0;
+  }
+  .ch-group-label {
     font-family: 'JetBrains Mono', monospace;
     font-size: 9px;
-    padding: 3px 8px;
-    border: 1px solid var(--border);
-    background: transparent;
     color: var(--text-dim);
-    border-radius: 3px;
-    cursor: pointer;
-    transition: all 0.15s;
+    padding: 6px 12px 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
   }
-
-  .ch-toggle.active {
-    border-color: var(--accent);
+  .ch-group-actions {
+    float: right;
+    font-size: 8px;
+  }
+  .ch-group-actions span {
+    cursor: pointer;
     color: var(--accent);
+    opacity: 0.6;
+    margin-left: 6px;
+  }
+  .ch-group-actions span:hover { opacity: 1; }
+  .ch-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 12px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    transition: background 0.1s;
+  }
+  .ch-item:hover { background: var(--bg-surface); }
+  .ch-item.active { color: var(--text); }
+  .ch-item .ch-dot {
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .ch-item.active .ch-dot {
+    border-color: transparent;
     background: rgba(0, 212, 255, 0.08);
   }
 
@@ -703,8 +761,17 @@
       <input type="range" id="gainSlider" min="1" max="100" value="20">
       <span id="gainValue">20</span>
     </div>
-    <div class="channel-toggles" id="channelToggles"></div>
   </div>
+</div>
+
+<!-- Channel panel (left side) -->
+<div class="channel-panel" id="channelPanel">
+  <div class="ch-panel-resize" id="chPanelResize"></div>
+  <div class="channel-panel-header">
+    <span>Channels</span>
+    <button class="side-panel-close" onclick="document.getElementById('channelPanel').classList.remove('active')">&times;</button>
+  </div>
+  <div class="channel-panel-body" id="channelPanelBody"></div>
 </div>
 
 <!-- Loading overlay -->
@@ -739,7 +806,9 @@
     <tr><td colspan="2" style="color:var(--text-dim);font-size:10px;padding:8px 0 2px">GENERAL</td></tr>
     <tr><td>Ctrl+Z</td><td>Undo mark</td></tr>
     <tr><td>Ctrl+Shift+Z</td><td>Redo mark</td></tr>
+    <tr><td>c</td><td>Toggle channel panel</td></tr>
     <tr><td>t</td><td>Toggle H5 tree panel</td></tr>
+    <tr><td>+ / -</td><td>Font size</td></tr>
     <tr><td>:</td><td>Command palette</td></tr>
     <tr><td>?</td><td>Toggle this help</td></tr>
   </table>
@@ -1043,7 +1112,7 @@ const nextBtn = document.getElementById('nextBtn');
 const epochInfo = document.getElementById('epochInfo');
 const gainSlider = document.getElementById('gainSlider');
 const gainValue = document.getElementById('gainValue');
-const channelToggles = document.getElementById('channelToggles');
+// channelToggles removed — now using channel panel
 const hypnoTime = document.getElementById('hypnoTime');
 
 // (2.1) Color themes
@@ -1331,36 +1400,89 @@ async function loadFile(arrayBuffer, opts = {}) {
 
 // (5) Channel toggles
 function buildChannelToggles() {
-  channelToggles.innerHTML = '';
-  // Sort channels by signal type order for the toggle buttons
+  const body = document.getElementById('channelPanelBody');
+  body.innerHTML = '';
+
+  // Group channels by signal type
+  const groups = {};
   const sorted = [...channels].sort((a, b) => getSignalOrder(a.name) - getSignalOrder(b.name));
-  sorted.forEach((ch) => {
-    const color = getSignalColor(ch.name);
-    const btn = document.createElement('button');
-    btn.className = 'ch-toggle' + (activeChannels.includes(ch.name) ? ' active' : '');
-    btn.textContent = ch.name.replace('EEG ', '').replace(' horizontal', '');
-    btn.style.borderColor = activeChannels.includes(ch.name) ? color : '';
-    btn.style.color = activeChannels.includes(ch.name) ? color : '';
-    btn.onclick = () => toggleChannel(ch.name, btn);
-    channelToggles.appendChild(btn);
+  sorted.forEach(ch => {
+    const type = getSignalType(ch.name).type;
+    if (!groups[type]) groups[type] = [];
+    groups[type].push(ch);
+  });
+
+  for (const [type, chs] of Object.entries(groups)) {
+    // Group header with all/none toggles
+    const groupLabel = document.createElement('div');
+    groupLabel.className = 'ch-group-label';
+    const actions = document.createElement('span');
+    actions.className = 'ch-group-actions';
+    const allBtn = document.createElement('span');
+    allBtn.textContent = 'all';
+    allBtn.onclick = () => { chs.forEach(c => { if (!activeChannels.includes(c.name)) activeChannels.push(c.name); }); refreshChannelPanel(); onChannelsChanged(); };
+    const noneBtn = document.createElement('span');
+    noneBtn.textContent = 'none';
+    noneBtn.onclick = () => { chs.forEach(c => { const idx = activeChannels.indexOf(c.name); if (idx >= 0) activeChannels.splice(idx, 1); }); refreshChannelPanel(); onChannelsChanged(); };
+    actions.appendChild(allBtn);
+    actions.appendChild(noneBtn);
+    groupLabel.textContent = type;
+    groupLabel.appendChild(actions);
+    body.appendChild(groupLabel);
+
+    // Channel items
+    chs.forEach(ch => {
+      const color = getSignalColor(ch.name);
+      const item = document.createElement('div');
+      item.className = 'ch-item' + (activeChannels.includes(ch.name) ? ' active' : '');
+      item.dataset.ch = ch.name;
+
+      const dot = document.createElement('div');
+      dot.className = 'ch-dot';
+      dot.style.background = activeChannels.includes(ch.name) ? color : 'transparent';
+      dot.style.borderColor = activeChannels.includes(ch.name) ? color : '';
+
+      const label = document.createElement('span');
+      label.textContent = ch.name;
+
+      const info = document.createElement('span');
+      info.style.cssText = 'margin-left:auto;font-size:9px;color:var(--text-dim)';
+      info.textContent = ch.sfreq + ' Hz';
+
+      item.appendChild(dot);
+      item.appendChild(label);
+      item.appendChild(info);
+
+      item.onclick = () => {
+        const idx = activeChannels.indexOf(ch.name);
+        if (idx >= 0) activeChannels.splice(idx, 1);
+        else activeChannels.push(ch.name);
+        refreshChannelPanel();
+        onChannelsChanged();
+      };
+
+      body.appendChild(item);
+    });
+  }
+}
+
+function refreshChannelPanel() {
+  const items = document.querySelectorAll('#channelPanelBody .ch-item');
+  items.forEach(item => {
+    const name = item.dataset.ch;
+    const isActive = activeChannels.includes(name);
+    const color = getSignalColor(name);
+    item.classList.toggle('active', isActive);
+    const dot = item.querySelector('.ch-dot');
+    dot.style.background = isActive ? color : 'transparent';
+    dot.style.borderColor = isActive ? color : '';
   });
 }
 
-function toggleChannel(name, btn) {
-  const color = getSignalColor(name);
-  const i = activeChannels.indexOf(name);
-  if (i >= 0) {
-    activeChannels.splice(i, 1);
-    btn.classList.remove('active');
-    btn.style.borderColor = '';
-    btn.style.color = '';
-  } else {
-    activeChannels.push(name);
-    btn.classList.add('active');
-    btn.style.borderColor = color;
-    btn.style.color = color;
-  }
+function onChannelsChanged() {
+  prevLabelKey = ''; // force label rebuild
   saveSettings({ activeChannels });
+  saveCurrentFileState();
   drawWaveforms();
 }
 
@@ -1831,6 +1953,29 @@ function updateEpochInfo() {
 }
 
 // (9) Helpers
+// Font size adjust: +/- 1px on all text elements
+let fontDelta = savedSettings.fontDelta ?? 0;
+const FONT_DELTA_MIN = -4, FONT_DELTA_MAX = 8;
+
+function applyFontDelta() {
+  document.querySelectorAll('*').forEach(el => {
+    if (el.tagName === 'CANVAS' || el.tagName === 'SVG') return;
+    if (!el.dataset.origFs) {
+      el.dataset.origFs = parseInt(getComputedStyle(el).fontSize) || 0;
+    }
+    const orig = parseInt(el.dataset.origFs);
+    if (orig > 0) {
+      el.style.fontSize = Math.max(6, orig + fontDelta) + 'px';
+    }
+  });
+}
+
+function adjustFontDelta(delta) {
+  fontDelta = Math.max(FONT_DELTA_MIN, Math.min(FONT_DELTA_MAX, fontDelta + delta));
+  applyFontDelta();
+  saveSettings({ fontDelta });
+}
+
 function formatTime(seconds) {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
@@ -1997,10 +2142,12 @@ document.onkeydown = (e) => {
   }
   if (cmdBarOpen) return; // let cmd input handle its own keys
 
-  // Esc closes side panel
+  // Esc closes panels
   if (e.key === 'Escape') {
     const sp = document.getElementById('sidePanel');
+    const cp = document.getElementById('channelPanel');
     if (sp.classList.contains('active')) { sp.classList.remove('active'); return; }
+    if (cp.classList.contains('active')) { cp.classList.remove('active'); return; }
   }
 
   // T toggles h5 tree panel
@@ -2010,6 +2157,16 @@ document.onkeydown = (e) => {
     else { cmdShowH5(); }
     return;
   }
+
+  // C toggles channel panel
+  if (e.key === 'c' || e.key === 'C') {
+    document.getElementById('channelPanel').classList.toggle('active');
+    return;
+  }
+
+  // Font size: +/-
+  if (e.key === '=' || e.key === '+') { adjustFontDelta(1); return; }
+  if (e.key === '-') { adjustFontDelta(-1); return; }
 
   // Undo/Redo
   if (e.key === 'z' && e.ctrlKey && !e.shiftKey) { e.preventDefault(); undo(); return; }
@@ -2195,6 +2352,31 @@ document.addEventListener('mouseup', () => {
   }
 });
 
+// Channel panel resize
+const CH_PANEL_MIN = 160, CH_PANEL_MAX = 400;
+let chPanelWidth = savedSettings.chPanelWidth ?? 200;
+document.documentElement.style.setProperty('--ch-panel-width', chPanelWidth + 'px');
+
+let chPanelResizing = false, chResizeStartX = 0, chResizeStartW = 0;
+document.getElementById('chPanelResize').onmousedown = (e) => {
+  chPanelResizing = true;
+  chResizeStartX = e.clientX;
+  chResizeStartW = chPanelWidth;
+  e.preventDefault();
+};
+document.addEventListener('mousemove', (e) => {
+  if (!chPanelResizing) return;
+  const delta = e.clientX - chResizeStartX;
+  chPanelWidth = Math.max(CH_PANEL_MIN, Math.min(CH_PANEL_MAX, chResizeStartW + delta));
+  document.documentElement.style.setProperty('--ch-panel-width', chPanelWidth + 'px');
+});
+document.addEventListener('mouseup', () => {
+  if (chPanelResizing) {
+    chPanelResizing = false;
+    saveSettings({ chPanelWidth });
+  }
+});
+
 // (12.1) showh5 command
 function cmdShowH5() {
   if (!psgFile) { alert('No file loaded.'); return; }
@@ -2300,6 +2482,7 @@ function buildH5Tree(file, path) {
 }
 
 // (11) Init
+if (fontDelta !== 0) applyFontDelta();
 initH5().then(() => {
   console.log('h5wasm ready');
   // Build recent files list
