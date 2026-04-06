@@ -292,12 +292,23 @@
     flex: 1;
     position: relative;
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
   }
 
-  #waveformCanvas {
+  #waveformCanvas, #slowCanvas {
     width: 100%;
-    height: 100%;
+    flex-shrink: 0;
   }
+
+  .waveform-divider {
+    width: 100%;
+    height: 2px;
+    background: var(--border);
+    flex-shrink: 0;
+    display: none;
+  }
+  .waveform-divider.active { display: block; }
 
   /* Controls */
   .controls {
@@ -744,8 +755,10 @@
     <div class="waveform-labels" id="waveformLabels">
       <div class="label-resize" id="labelResize"></div>
     </div>
-    <div class="waveform-canvas-wrap">
+    <div class="waveform-canvas-wrap" id="waveformWrap">
       <canvas id="waveformCanvas"></canvas>
+      <div class="waveform-divider" id="waveformDivider"></div>
+      <canvas id="slowCanvas"></canvas>
     </div>
   </div>
 
@@ -790,6 +803,15 @@
     <label style="margin:0">Dark Mode</label>
     <button class="btn" id="themeToggle" style="padding:4px 10px;font-size:14px"></button>
   </div>
+  <div class="config-section" style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
+    <label style="margin:0">Slow Window</label>
+    <select id="slowWindowSelect" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-family:'JetBrains Mono',monospace;font-size:11px">
+      <option value="60">1 min</option>
+      <option value="120">2 min</option>
+      <option value="300">5 min</option>
+      <option value="600">10 min</option>
+    </select>
+  </div>
 </div>
 
 <div class="help-panel" id="helpPanel">
@@ -798,6 +820,7 @@
     <tr><td colspan="2" style="color:var(--text-dim);font-size:10px;padding:4px 0 2px">NAVIGATION</td></tr>
     <tr><td>← →</td><td>Prev / next epoch</td></tr>
     <tr><td>↑ ↓</td><td>Skip 10 epochs</td></tr>
+    <tr><td>Scroll</td><td>Navigate epochs</td></tr>
     <tr><td colspan="2" style="color:var(--text-dim);font-size:10px;padding:8px 0 2px">HYPNOGRAM</td></tr>
     <tr><td>Click/Drag</td><td>Scrub timeline</td></tr>
     <tr><td>Right-click</td><td>Mark In / Mark Out</td></tr>
@@ -846,21 +869,21 @@
 // Signal type detection and ordering (Mucha palette)
 // ymaxGroup: channels sharing the same group get the same ymax
 const SIGNAL_TYPES = [
-  { type: 'EOG', order: 0, ymaxGroup: 'EEG_EOG', pattern: /eog|e1|e2|^E1|^E2/i,
+  { type: 'EOG', order: 0, ymaxGroup: 'EEG_EOG', speed: 'fast', pattern: /eog|e1|e2|^E1|^E2/i,
     light: '#1b4965', dark: '#5ba3d9' },
-  { type: 'EEG', order: 1, ymaxGroup: 'EEG_EOG', pattern: /eeg|fpz|fz|cz|pz|oz|f3|f4|c3|c4|o1|o2|a1|a2|^F\d|^C\d|^O\d|^P\d/i,
+  { type: 'EEG', order: 1, ymaxGroup: 'EEG_EOG', speed: 'fast', pattern: /eeg|fpz|fz|cz|pz|oz|f3|f4|c3|c4|o1|o2|a1|a2|^F\d|^C\d|^O\d|^P\d/i,
     light: '#2b2b2b', dark: '#d4cfc8' },
-  { type: 'EMG', order: 2, ymaxGroup: 'EMG', pattern: /emg|chin|subment/i,
+  { type: 'EMG', order: 2, ymaxGroup: 'EMG', speed: 'fast', pattern: /emg|chin|subment/i,
     light: '#c68b3f', dark: '#daa654' },
-  { type: 'ECG', order: 3, ymaxGroup: 'ECG', pattern: /ecg|ekg|heart/i,
+  { type: 'ECG', order: 3, ymaxGroup: 'ECG', speed: 'fast', pattern: /ecg|ekg|heart/i,
     light: '#8b3a3a', dark: '#c47070' },
-  { type: 'Resp', order: 4, ymaxGroup: 'Resp', pattern: /nasal|therm|thor|abdo|flow|press|resp|snore|sum/i,
+  { type: 'Resp', order: 4, ymaxGroup: 'Resp', speed: 'slow', pattern: /nasal|therm|thor|abdo|flow|press|resp|snore|sum/i,
     light: '#3e7a5e', dark: '#6db88e' },
-  { type: 'SpO2', order: 5, ymaxGroup: 'SpO2', pattern: /spo2|sao2|oxygen/i,
+  { type: 'SpO2', order: 5, ymaxGroup: 'SpO2', speed: 'slow', pattern: /spo2|sao2|oxygen/i,
     light: '#1b4965', dark: '#5ba3d9' },
-  { type: 'Limb', order: 6, ymaxGroup: 'Limb', pattern: /leg|limb|plm/i,
+  { type: 'Limb', order: 6, ymaxGroup: 'Limb', speed: 'slow', pattern: /leg|limb|plm/i,
     light: '#6b4c6e', dark: '#a07ca3' },
-  { type: 'Other', order: 7, ymaxGroup: 'Other', pattern: /./,
+  { type: 'Other', order: 7, ymaxGroup: 'Other', speed: 'slow', pattern: /./,
     light: '#666666', dark: '#999999' },
 ];
 
@@ -873,6 +896,10 @@ function getSignalType(chName) {
 
 function getYmaxGroup(chName) {
   return getSignalType(chName).ymaxGroup;
+}
+
+function getSignalSpeed(chName) {
+  return getSignalType(chName).speed;
 }
 
 function getSignalColor(chName) {
@@ -1107,6 +1134,8 @@ const openBtn = document.getElementById('openBtn');
 const fileMeta = document.getElementById('fileMeta');
 const hypnogramCanvas = document.getElementById('hypnogramCanvas');
 const waveformCanvas = document.getElementById('waveformCanvas');
+const slowCanvas = document.getElementById('slowCanvas');
+const waveformDivider = document.getElementById('waveformDivider');
 const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
 const epochInfo = document.getElementById('epochInfo');
@@ -1155,6 +1184,20 @@ document.getElementById('themeToggle').onclick = () => {
   applyTheme(!darkMode);
   buildChannelToggles();
   drawHypnogram();
+  drawWaveforms();
+};
+
+// Slow channel window duration in seconds
+let slowWindowSec = savedSettings.slowWindowSec ?? 300; // default 5 min
+
+// Slow window selector
+const slowSelect = document.getElementById('slowWindowSelect');
+slowSelect.value = slowWindowSec;
+slowSelect.onchange = () => {
+  slowWindowSec = parseInt(slowSelect.value);
+  saveSettings({ slowWindowSec });
+  clearEpochCache();
+  buildChannelToggles();
   drawWaveforms();
 };
 
@@ -1403,66 +1446,81 @@ function buildChannelToggles() {
   const body = document.getElementById('channelPanelBody');
   body.innerHTML = '';
 
-  // Group channels by signal type
-  const groups = {};
+  // Group channels by speed then signal type
   const sorted = [...channels].sort((a, b) => getSignalOrder(a.name) - getSignalOrder(b.name));
-  sorted.forEach(ch => {
-    const type = getSignalType(ch.name).type;
-    if (!groups[type]) groups[type] = [];
-    groups[type].push(ch);
-  });
+  const fastChs = sorted.filter(ch => getSignalSpeed(ch.name) === 'fast');
+  const slowChs = sorted.filter(ch => getSignalSpeed(ch.name) === 'slow');
 
-  for (const [type, chs] of Object.entries(groups)) {
-    // Group header with all/none toggles
-    const groupLabel = document.createElement('div');
-    groupLabel.className = 'ch-group-label';
-    const actions = document.createElement('span');
-    actions.className = 'ch-group-actions';
-    const allBtn = document.createElement('span');
-    allBtn.textContent = 'all';
-    allBtn.onclick = () => { chs.forEach(c => { if (!activeChannels.includes(c.name)) activeChannels.push(c.name); }); refreshChannelPanel(); onChannelsChanged(); };
-    const noneBtn = document.createElement('span');
-    noneBtn.textContent = 'none';
-    noneBtn.onclick = () => { chs.forEach(c => { const idx = activeChannels.indexOf(c.name); if (idx >= 0) activeChannels.splice(idx, 1); }); refreshChannelPanel(); onChannelsChanged(); };
-    actions.appendChild(allBtn);
-    actions.appendChild(noneBtn);
-    groupLabel.textContent = type;
-    groupLabel.appendChild(actions);
-    body.appendChild(groupLabel);
+  const sections = [];
+  if (fastChs.length > 0) sections.push({ label: 'FAST (30s)', chs: fastChs });
+  if (slowChs.length > 0) sections.push({ label: `SLOW (${slowWindowSec >= 60 ? (slowWindowSec/60)+'min' : slowWindowSec+'s'})`, chs: slowChs });
 
-    // Channel items
-    chs.forEach(ch => {
-      const color = getSignalColor(ch.name);
-      const item = document.createElement('div');
-      item.className = 'ch-item' + (activeChannels.includes(ch.name) ? ' active' : '');
-      item.dataset.ch = ch.name;
+  for (const section of sections) {
+    // Section header
+    const secHeader = document.createElement('div');
+    secHeader.className = 'ch-group-label';
+    secHeader.style.cssText = 'font-weight:700;color:var(--accent);padding-top:8px';
+    secHeader.textContent = section.label;
+    body.appendChild(secHeader);
 
-      const dot = document.createElement('div');
-      dot.className = 'ch-dot';
-      dot.style.background = activeChannels.includes(ch.name) ? color : 'transparent';
-      dot.style.borderColor = activeChannels.includes(ch.name) ? color : '';
-
-      const label = document.createElement('span');
-      label.textContent = ch.name;
-
-      const info = document.createElement('span');
-      info.style.cssText = 'margin-left:auto;font-size:9px;color:var(--text-dim)';
-      info.textContent = ch.sfreq + ' Hz';
-
-      item.appendChild(dot);
-      item.appendChild(label);
-      item.appendChild(info);
-
-      item.onclick = () => {
-        const idx = activeChannels.indexOf(ch.name);
-        if (idx >= 0) activeChannels.splice(idx, 1);
-        else activeChannels.push(ch.name);
-        refreshChannelPanel();
-        onChannelsChanged();
-      };
-
-      body.appendChild(item);
+    // Group by signal type within this section
+    const groups = {};
+    section.chs.forEach(ch => {
+      const type = getSignalType(ch.name).type;
+      if (!groups[type]) groups[type] = [];
+      groups[type].push(ch);
     });
+
+    for (const [type, chs] of Object.entries(groups)) {
+      const groupLabel = document.createElement('div');
+      groupLabel.className = 'ch-group-label';
+      const actions = document.createElement('span');
+      actions.className = 'ch-group-actions';
+      const allBtn = document.createElement('span');
+      allBtn.textContent = 'all';
+      allBtn.onclick = () => { chs.forEach(c => { if (!activeChannels.includes(c.name)) activeChannels.push(c.name); }); refreshChannelPanel(); onChannelsChanged(); };
+      const noneBtn = document.createElement('span');
+      noneBtn.textContent = 'none';
+      noneBtn.onclick = () => { chs.forEach(c => { const idx = activeChannels.indexOf(c.name); if (idx >= 0) activeChannels.splice(idx, 1); }); refreshChannelPanel(); onChannelsChanged(); };
+      actions.appendChild(allBtn);
+      actions.appendChild(noneBtn);
+      groupLabel.textContent = type;
+      groupLabel.appendChild(actions);
+      body.appendChild(groupLabel);
+
+      chs.forEach(ch => {
+        const color = getSignalColor(ch.name);
+        const item = document.createElement('div');
+        item.className = 'ch-item' + (activeChannels.includes(ch.name) ? ' active' : '');
+        item.dataset.ch = ch.name;
+
+        const dot = document.createElement('div');
+        dot.className = 'ch-dot';
+        dot.style.background = activeChannels.includes(ch.name) ? color : 'transparent';
+        dot.style.borderColor = activeChannels.includes(ch.name) ? color : '';
+
+        const label = document.createElement('span');
+        label.textContent = ch.name;
+
+        const info = document.createElement('span');
+        info.style.cssText = 'margin-left:auto;font-size:9px;color:var(--text-dim)';
+        info.textContent = ch.sfreq + ' Hz';
+
+        item.appendChild(dot);
+        item.appendChild(label);
+        item.appendChild(info);
+
+        item.onclick = () => {
+          const idx = activeChannels.indexOf(ch.name);
+          if (idx >= 0) activeChannels.splice(idx, 1);
+          else activeChannels.push(ch.name);
+          refreshChannelPanel();
+          onChannelsChanged();
+        };
+
+        body.appendChild(item);
+      });
+    }
   }
 }
 
@@ -1635,95 +1693,60 @@ function drawTimeAxis(tStart, tEnd, tRange, timeToX, mx0, mx1) {
 }
 
 // (7) Waveform rendering
-function drawWaveforms() {
-  const canvas = waveformCanvas;
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
+// Shared: read channel data for a given time range
+function readChannelData(chName, tStart, tDuration) {
+  const ch = channels.find(c => c.name === chName);
+  if (!ch) return null;
+  const sfreq = ch.sfreq;
+  const startSample = Math.floor(tStart * sfreq);
+  const numSamples = Math.floor(tDuration * sfreq);
+  const endSample = Math.min(startSample + numSamples, ch.length);
+  if (startSample >= ch.length) return null;
 
-  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-waveform').trim();
-  ctx.fillRect(0, 0, w, h);
+  const cacheKey = `${chName}:${tStart}:${tDuration}`;
+  let cached = epochCache[cacheKey];
+  if (!cached) {
+    const ds = psgFile.get(`signals/${chName}`);
+    const data = readDataset(ds, [[startSample, endSample]]);
+    let sum = 0, sum2 = 0;
+    for (let i = 0; i < data.length; i++) { sum += data[i]; sum2 += data[i] * data[i]; }
+    const mean = sum / data.length;
+    const std = Math.sqrt(sum2 / data.length - mean * mean) || 1;
+    cached = { data, mean, std, numSamples };
+    epochCache[cacheKey] = cached;
+  }
+  return { ...cached, ch, color: getSignalColor(chName), sfreq: ch.sfreq, chName };
+}
 
-  if (!psgFile || activeChannels.length === 0) return;
-
-  const nCh = activeChannels.length;
-  const chHeight = h / nCh;
-  const epochStart = currentEpoch * 30;
-
-  // (7.1) Draw grid
-  const gridBase = darkMode ? '255,255,255' : '0,0,0';
+// Shared: draw grid on a canvas
+function drawGrid(ctx, w, h, nCh, chHeight, tDuration, gridBase) {
   ctx.strokeStyle = `rgba(${gridBase},0.06)`;
   ctx.lineWidth = 1;
-  // Horizontal: per channel
   for (let i = 1; i < nCh; i++) {
     const y = i * chHeight;
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(w, y);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
   }
-  // Vertical: per second
-  for (let s = 0; s <= 30; s++) {
-    const x = (s / 30) * w;
-    ctx.strokeStyle = s % 5 === 0
+  // Vertical: per second, adaptive interval
+  const secInterval = tDuration <= 60 ? 1 : tDuration <= 300 ? 5 : tDuration <= 600 ? 10 : 30;
+  const majorInterval = tDuration <= 60 ? 5 : tDuration <= 300 ? 30 : tDuration <= 600 ? 60 : 300;
+  for (let s = 0; s <= tDuration; s += secInterval) {
+    const x = (s / tDuration) * w;
+    ctx.strokeStyle = s % majorInterval === 0
       ? `rgba(${gridBase},0.12)` : `rgba(${gridBase},0.04)`;
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, h);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
   }
+}
 
-  // (7.2) Read data and compute stats (first pass)
-  const sortedActive = [...activeChannels].sort((a, b) => getSignalOrder(a) - getSignalOrder(b));
-  const gainFactor = gain / 50;
-  const chData = []; // { chName, ch, data, mean, std, color, numSamples }
-
-  sortedActive.forEach((chName) => {
-    const ch = channels.find(c => c.name === chName);
-    if (!ch) return;
-    const sfreq = ch.sfreq;
-    const startSample = Math.floor(epochStart * sfreq);
-    const numSamples = Math.floor(30 * sfreq);
-    const endSample = Math.min(startSample + numSamples, ch.length);
-    if (startSample >= ch.length) return;
-
-    const cacheKey = `${chName}:${currentEpoch}`;
-    let cached = epochCache[cacheKey];
-    if (!cached) {
-      const ds = psgFile.get(`signals/${chName}`);
-      const data = readDataset(ds, [[startSample, endSample]]);
-      let sum = 0, sum2 = 0;
-      for (let i = 0; i < data.length; i++) {
-        sum += data[i]; sum2 += data[i] * data[i];
-      }
-      const mean = sum / data.length;
-      const std = Math.sqrt(sum2 / data.length - mean * mean) || 1;
-      cached = { data, mean, std, numSamples };
-      epochCache[cacheKey] = cached;
-    }
-
-    const color = getSignalColor(chName);
-    chData.push({ chName, ch, data: cached.data, mean: cached.mean, std: cached.std, color, numSamples: cached.numSamples, sfreq: ch.sfreq });
-  });
-
-  // (7.2.1) Resolve ymax per group: fixed or max-std within group
-  const groupStdMax = {}; // { groupName: max std }
-  chData.forEach(d => {
-    const g = getYmaxGroup(d.chName);
-    groupStdMax[g] = Math.max(groupStdMax[g] || 0, d.std);
-  });
-
-  // (7.2.2) Draw each channel
-  const channelLabelData = [];
-  chData.forEach((d, chIdx) => {
+// Shared: draw traces on a canvas
+function drawTraces(ctx, w, chDataList, chHeight, gainFactor, groupStdMax) {
+  const labelData = [];
+  chDataList.forEach((d, chIdx) => {
     const group = getYmaxGroup(d.chName);
     const isFixed = fixedYmax[group] != null;
-    // ymax = half-range in data units that maps to chHeight/2
     const ymax = isFixed ? fixedYmax[group] : (groupStdMax[group] * 3 / gainFactor);
-
     const yCenter = chIdx * chHeight + chHeight / 2;
-    const pxPerUnit = (chHeight / 2) / ymax; // pixels per data unit
+    const pxPerUnit = (chHeight / 2) / ymax;
 
-    // Draw trace
     ctx.strokeStyle = d.color;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
@@ -1734,24 +1757,155 @@ function drawWaveforms() {
     }
     ctx.stroke();
 
-    channelLabelData.push({
-      name: d.chName, sfreq: d.sfreq, color: d.color,
-      yHalfRange: ymax, group, isFixed,
-    });
+    labelData.push({ name: d.chName, sfreq: d.sfreq, color: d.color, yHalfRange: ymax, group, isFixed });
   });
+  return labelData;
+}
 
-  // (7.3) Time axis
-  const timeColor = darkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.25)';
-  ctx.fillStyle = timeColor;
-  ctx.font = '9px "JetBrains Mono", monospace';
-  for (let s = 0; s <= 30; s += 5) {
-    const x = (s / 30) * w;
-    const t = epochStart + s;
-    ctx.fillText(formatTime(t), x + 2, h - 4);
+function drawWaveforms() {
+  if (!psgFile || activeChannels.length === 0) {
+    // Clear both canvases
+    const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-waveform').trim();
+    [waveformCanvas, slowCanvas].forEach(c => {
+      const ctx = c.getContext('2d'); ctx.fillStyle = bgColor; ctx.fillRect(0, 0, c.width, c.height);
+    });
+    waveformDivider.classList.remove('active');
+    slowCanvas.classList.remove('active');
+    return;
   }
 
-  // (7.4) Build left-side labels
-  buildWaveformLabels(channelLabelData, chHeight);
+  const sortedActive = [...activeChannels].sort((a, b) => getSignalOrder(a) - getSignalOrder(b));
+  const fastChs = sortedActive.filter(n => getSignalSpeed(n) === 'fast');
+  const slowChs = sortedActive.filter(n => getSignalSpeed(n) === 'slow');
+  const hasSlow = slowChs.length > 0;
+  const hasFast = fastChs.length > 0;
+
+  waveformDivider.classList.toggle('active', hasSlow && hasFast);
+  slowCanvas.style.display = hasSlow ? '' : 'none';
+
+  // Equal channel height: total wrap height divided by total channels
+  const wrap = document.getElementById('waveformWrap');
+  const wrapW = wrap.clientWidth;
+  const dividerH = (hasSlow && hasFast) ? 2 : 0;
+  const totalChs = fastChs.length + slowChs.length;
+  const wrapH = wrap.clientHeight - dividerH;
+  const chHeight = totalChs > 0 ? wrapH / totalChs : 0;
+
+  const fastH = Math.round(chHeight * fastChs.length);
+  const slowH = Math.round(chHeight * slowChs.length);
+
+  waveformCanvas.width = wrapW;
+  waveformCanvas.height = fastH || wrapH;
+  waveformCanvas.style.height = (fastH || wrapH) + 'px';
+  if (hasSlow) {
+    slowCanvas.width = wrapW;
+    slowCanvas.height = slowH;
+    slowCanvas.style.height = slowH + 'px';
+  }
+
+  const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-waveform').trim();
+  const gridBase = darkMode ? '255,255,255' : '0,0,0';
+  const gainFactor = gain / 50;
+  const epochStart = currentEpoch * 30;
+
+  let allLabelData = [];
+
+  // --- Fast channels ---
+  if (hasFast) {
+    const ctx = waveformCanvas.getContext('2d');
+    const w = waveformCanvas.width, h = waveformCanvas.height;
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, w, h);
+
+    const chHeight = h / fastChs.length;
+    drawGrid(ctx, w, h, fastChs.length, chHeight, 30, gridBase);
+
+    const fastData = fastChs.map(n => readChannelData(n, epochStart, 30)).filter(Boolean);
+    const groupStdMax = {};
+    fastData.forEach(d => {
+      const g = getYmaxGroup(d.chName);
+      groupStdMax[g] = Math.max(groupStdMax[g] || 0, d.std);
+    });
+
+    const labelData = drawTraces(ctx, w, fastData, chHeight, gainFactor, groupStdMax);
+    allLabelData.push(...labelData);
+
+    // Time axis
+    const timeColor = darkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.25)';
+    ctx.fillStyle = timeColor;
+    ctx.font = '9px "JetBrains Mono", monospace';
+    for (let s = 0; s <= 30; s += 5) {
+      ctx.fillText(formatTime(epochStart + s), (s / 30) * w + 2, h - 4);
+    }
+  } else {
+    const ctx = waveformCanvas.getContext('2d');
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+  }
+
+  // --- Slow channels ---
+  if (hasSlow) {
+    const ctx = slowCanvas.getContext('2d');
+    const w = slowCanvas.width, h = slowCanvas.height;
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, w, h);
+
+    // Slow window centered on current epoch
+    const slowHalf = slowWindowSec / 2;
+    let slowStart = epochStart + 15 - slowHalf; // center of current epoch
+    let slowEnd = slowStart + slowWindowSec;
+    if (slowStart < 0) { slowStart = 0; slowEnd = slowWindowSec; }
+    if (slowEnd > duration) { slowEnd = duration; slowStart = Math.max(0, slowEnd - slowWindowSec); }
+
+    const chHeight = h / slowChs.length;
+    drawGrid(ctx, w, h, slowChs.length, chHeight, slowWindowSec, gridBase);
+
+    const slowData = slowChs.map(n => readChannelData(n, slowStart, slowWindowSec)).filter(Boolean);
+    const groupStdMax = {};
+    slowData.forEach(d => {
+      const g = getYmaxGroup(d.chName);
+      groupStdMax[g] = Math.max(groupStdMax[g] || 0, d.std);
+    });
+
+    const labelData = drawTraces(ctx, w, slowData, chHeight, gainFactor, groupStdMax);
+    allLabelData.push(...labelData);
+
+    // Cursor bracket: current 30s epoch in slow view
+    const cursorX0 = ((epochStart - slowStart) / slowWindowSec) * w;
+    const cursorX1 = ((epochStart + 30 - slowStart) / slowWindowSec) * w;
+    ctx.fillStyle = darkMode ? 'rgba(251,146,60,0.08)' : 'rgba(251,146,60,0.1)';
+    ctx.fillRect(cursorX0, 0, cursorX1 - cursorX0, h);
+    ctx.strokeStyle = 'rgba(251,146,60,0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(cursorX0, 0); ctx.lineTo(cursorX0, h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cursorX1, 0); ctx.lineTo(cursorX1, h); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Time axis for slow
+    const timeColor = darkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.25)';
+    ctx.fillStyle = timeColor;
+    ctx.font = '9px "JetBrains Mono", monospace';
+    const tickInt = slowWindowSec <= 120 ? 10 : slowWindowSec <= 300 ? 30 : 60;
+    const firstTick = Math.ceil(slowStart / tickInt) * tickInt;
+    for (let t = firstTick; t <= slowEnd; t += tickInt) {
+      const x = ((t - slowStart) / slowWindowSec) * w;
+      ctx.fillText(formatTime(t), x + 2, h - 4);
+    }
+  }
+
+  // Labels: uniform height, but first slow channel absorbs divider gap
+  const labelHeights = [];
+  let slowIdx = 0;
+  allLabelData.forEach(d => {
+    if (getSignalSpeed(d.name) !== 'fast' && slowIdx === 0 && hasFast) {
+      labelHeights.push(chHeight + dividerH);
+      slowIdx++;
+    } else {
+      labelHeights.push(chHeight);
+    }
+  });
+  buildWaveformLabels(allLabelData, labelHeights);
 }
 
 function formatYScale(val) {
@@ -1776,11 +1930,22 @@ function niceRound(val) {
 let prevLabelKey = '';
 let currentLabelData = []; // live reference for double-click handlers
 
-function buildWaveformLabels(labelData, chHeight) {
-  currentLabelData = labelData; // keep live reference
+// chHeights: array of per-channel heights (or single number for backward compat)
+function buildWaveformLabels(labelData, chHeights) {
+  currentLabelData = labelData;
+  const heights = Array.isArray(chHeights) ? chHeights : labelData.map(() => chHeights);
   const container = document.getElementById('waveformLabels');
-  const labelKey = labelData.map(d => d.name).join(',') + ':' + chHeight;
+  const labelKey = labelData.map((d, i) => d.name + ':' + heights[i]).join(',');
   const needsFullRebuild = labelKey !== prevLabelKey;
+
+  // Compute cumulative Y positions
+  const yTops = [];
+  let cumY = 0;
+  for (let i = 0; i < labelData.length; i++) {
+    yTops.push(cumY);
+    cumY += heights[i] || 0;
+  }
+  const totalH = cumY;
 
   if (needsFullRebuild) {
     prevLabelKey = labelKey;
@@ -1788,19 +1953,16 @@ function buildWaveformLabels(labelData, chHeight) {
     container.innerHTML = '';
     container.appendChild(resizeHandle);
 
-    // Tick canvas
-    const totalH = labelData.length * chHeight;
     const tc = document.createElement('canvas');
     tc.id = 'labelTickCanvas';
     tc.className = 'waveform-label-ticks';
     container.appendChild(tc);
 
-    // Channel label divs
     labelData.forEach((d, i) => {
       const el = document.createElement('div');
       el.className = 'waveform-label-item';
-      el.style.top = (i * chHeight) + 'px';
-      el.style.height = chHeight + 'px';
+      el.style.top = yTops[i] + 'px';
+      el.style.height = heights[i] + 'px';
       el.style.cursor = 'pointer';
 
       const nameSpan = document.createElement('div');
@@ -1831,10 +1993,9 @@ function buildWaveformLabels(labelData, chHeight) {
     });
   }
 
-  // Always redraw tick canvas (fast — no DOM changes)
+  // Always redraw tick canvas
   const tickCanvas = document.getElementById('labelTickCanvas');
   if (!tickCanvas) return;
-  const totalH = labelData.length * chHeight;
   tickCanvas.width = labelWidth;
   tickCanvas.height = totalH;
   tickCanvas.style.width = labelWidth + 'px';
@@ -1845,20 +2006,21 @@ function buildWaveformLabels(labelData, chHeight) {
   const tickColor = darkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)';
 
   labelData.forEach((d, i) => {
-    const yCenter = i * chHeight + chHeight / 2;
+    const h = heights[i];
+    const yCenter = yTops[i] + h / 2;
     const isFixed = d.isFixed;
     const textColor = isFixed
       ? (darkMode ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)')
       : (darkMode ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.25)');
 
     const margin = 8;
-    const maxPx = chHeight / 2 - margin;
+    const maxPx = h / 2 - margin;
     let tickValue = niceRound(d.yHalfRange * 0.6);
-    let tickPx = d.yHalfRange > 0 ? (tickValue / d.yHalfRange) * (chHeight / 2) : 0;
+    let tickPx = d.yHalfRange > 0 ? (tickValue / d.yHalfRange) * (h / 2) : 0;
     let guard = 0;
     while (tickPx > maxPx && tickValue > 0 && guard++ < 15) {
       tickValue = niceRound(tickValue * 0.4);
-      tickPx = (tickValue / d.yHalfRange) * (chHeight / 2);
+      tickPx = (tickValue / d.yHalfRange) * (h / 2);
     }
 
     // Center tick
@@ -1955,19 +2117,22 @@ function updateEpochInfo() {
 // (9) Helpers
 // Font size adjust: +/- 1px on all text elements
 let fontDelta = savedSettings.fontDelta ?? 0;
+
 const FONT_DELTA_MIN = -4, FONT_DELTA_MAX = 8;
 
 function applyFontDelta() {
-  document.querySelectorAll('*').forEach(el => {
-    if (el.tagName === 'CANVAS' || el.tagName === 'SVG') return;
-    if (!el.dataset.origFs) {
-      el.dataset.origFs = parseInt(getComputedStyle(el).fontSize) || 0;
-    }
-    const orig = parseInt(el.dataset.origFs);
-    if (orig > 0) {
-      el.style.fontSize = Math.max(6, orig + fontDelta) + 'px';
-    }
-  });
+  try {
+    document.querySelectorAll('*').forEach(el => {
+      if (el.tagName === 'CANVAS' || el.tagName === 'SVG' || el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return;
+      if (!el.dataset.origFs) {
+        el.dataset.origFs = parseInt(getComputedStyle(el).fontSize) || 0;
+      }
+      const orig = parseInt(el.dataset.origFs);
+      if (orig > 0) {
+        el.style.fontSize = Math.max(6, orig + fontDelta) + 'px';
+      }
+    });
+  } catch(e) { console.warn('applyFontDelta error:', e); }
 }
 
 function adjustFontDelta(delta) {
@@ -2005,10 +2170,14 @@ function resizeCanvases() {
   taCanvas.width = hypnoCanvasW;
   taCanvas.height = 14;
 
-  // Waveform
-  const wRect = waveformCanvas.parentElement;
-  waveformCanvas.width = wRect.clientWidth;
-  waveformCanvas.height = wRect.clientHeight;
+  // Waveform — both canvases share the wrap's width
+  const wrap = document.getElementById('waveformWrap');
+  const wrapW = wrap.clientWidth;
+  // Heights determined by flex — need to read after layout
+  waveformCanvas.width = wrapW;
+  waveformCanvas.height = waveformCanvas.clientHeight || wrap.clientHeight;
+  slowCanvas.width = wrapW;
+  slowCanvas.height = slowCanvas.clientHeight || 0;
 }
 
 // (10) Event listeners
@@ -2078,9 +2247,10 @@ document.addEventListener('mousemove', (e) => {
   const delta = e.clientX - labelResizeStartX;
   labelWidth = Math.max(LABEL_MIN, Math.min(LABEL_MAX, labelResizeStartW + delta));
   document.documentElement.style.setProperty('--label-width', labelWidth + 'px');
-  const wRect = waveformCanvas.parentElement;
-  waveformCanvas.width = wRect.clientWidth;
-  waveformCanvas.height = wRect.clientHeight;
+  const wrap = document.getElementById('waveformWrap');
+  const wrapW = wrap.clientWidth;
+  waveformCanvas.width = wrapW;
+  slowCanvas.width = wrapW;
   drawWaveforms();
 });
 
@@ -2212,6 +2382,13 @@ document.addEventListener('mousemove', (e) => {
 document.addEventListener('mouseup', () => {
   hypnoDragging = false;
 });
+
+// Wheel scroll on signal panel → navigate epochs
+document.getElementById('waveformWrap').addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const delta = e.deltaY > 0 ? 1 : -1;
+  navigate(delta);
+}, { passive: false });
 
 // Gain
 gainSlider.oninput = () => {
