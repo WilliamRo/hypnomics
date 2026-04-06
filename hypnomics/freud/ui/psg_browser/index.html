@@ -11,6 +11,7 @@
     --bg-deep: #0a0e1a;
     --bg-panel: #0d1220;
     --bg-surface: #111827;
+    --bg-waveform: #0a0e1a;
     --border: #1e293b;
     --text: #e2e8f0;
     --text-dim: #64748b;
@@ -217,6 +218,68 @@
   /* Waveform area */
   .waveform-container {
     flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .waveform-labels {
+    width: var(--label-width, 72px);
+    min-width: var(--label-width, 72px);
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .label-resize {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 4px;
+    height: 100%;
+    cursor: ew-resize;
+    z-index: 10;
+  }
+  .label-resize:hover {
+    background: var(--accent);
+    opacity: 0.3;
+  }
+
+  .waveform-label-item {
+    position: absolute;
+    left: 0;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 8px;
+    font-family: 'JetBrains Mono', monospace;
+    overflow: hidden;
+  }
+  .waveform-label-name {
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .waveform-label-info {
+    font-size: 8px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+
+  .waveform-label-ticks {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .waveform-canvas-wrap {
+    flex: 1;
     position: relative;
     overflow: hidden;
   }
@@ -326,6 +389,25 @@
 
   input[type="file"] { display: none; }
 
+  .recent-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    margin: 2px 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg-surface);
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text);
+    transition: border-color 0.15s;
+  }
+  .recent-item:hover { border-color: var(--accent); }
+  .recent-item .ri-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .recent-item .ri-meta { font-size: 9px; color: var(--text-dim); white-space: nowrap; margin-left: 8px; }
+
   .config-panel {
     display: none;
     position: fixed;
@@ -416,7 +498,9 @@
 <div class="dropzone" id="dropzone">
   <div class="dropzone-text">Drop a .psg.h5 file here</div>
   <div class="dropzone-hint">or click "Open .psg.h5" above</div>
-  <button class="btn" id="restoreBtn" style="margin-top:16px;display:none" onclick="restoreLastSession()">Restore last session</button>
+  <div id="recentList" style="margin-top:16px;width:100%;max-width:400px;display:none">
+    <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;font-family:'JetBrains Mono',monospace">RECENT FILES</div>
+  </div>
 </div>
 
 <!-- Viewer (shown after file load) -->
@@ -442,7 +526,12 @@
 
   <!-- Waveforms -->
   <div class="waveform-container">
-    <canvas id="waveformCanvas"></canvas>
+    <div class="waveform-labels" id="waveformLabels">
+      <div class="label-resize" id="labelResize"></div>
+    </div>
+    <div class="waveform-canvas-wrap">
+      <canvas id="waveformCanvas"></canvas>
+    </div>
   </div>
 
   <!-- Controls -->
@@ -454,7 +543,7 @@
     </div>
     <div class="gain-group">
       <span>Gain</span>
-      <input type="range" id="gainSlider" min="1" max="50" value="20">
+      <input type="range" id="gainSlider" min="1" max="100" value="20">
       <span id="gainValue">20</span>
     </div>
     <div class="channel-toggles" id="channelToggles"></div>
@@ -488,6 +577,8 @@
     <tr><td colspan="2" style="color:var(--text-dim);font-size:10px;padding:8px 0 2px">HYPNOGRAM</td></tr>
     <tr><td>Click/Drag</td><td>Scrub timeline</td></tr>
     <tr><td>Right-click</td><td>Mark In / Mark Out</td></tr>
+    <tr><td colspan="2" style="color:var(--text-dim);font-size:10px;padding:8px 0 2px">SIGNALS</td></tr>
+    <tr><td>Dbl-click</td><td>Fix/unfix group ymax</td></tr>
     <tr><td colspan="2" style="color:var(--text-dim);font-size:10px;padding:8px 0 2px">GENERAL</td></tr>
     <tr><td>Ctrl+Z</td><td>Undo mark</td></tr>
     <tr><td>Ctrl+Shift+Z</td><td>Redo mark</td></tr>
@@ -504,22 +595,23 @@
 // =============================================================================
 
 // Signal type detection and ordering (Mucha palette)
+// ymaxGroup: channels sharing the same group get the same ymax
 const SIGNAL_TYPES = [
-  { type: 'EOG', order: 0, pattern: /eog|e1|e2|^E1|^E2/i,
+  { type: 'EOG', order: 0, ymaxGroup: 'EEG_EOG', pattern: /eog|e1|e2|^E1|^E2/i,
     light: '#1b4965', dark: '#5ba3d9' },
-  { type: 'EEG', order: 1, pattern: /eeg|fpz|fz|cz|pz|oz|f3|f4|c3|c4|o1|o2|a1|a2|^F\d|^C\d|^O\d|^P\d/i,
+  { type: 'EEG', order: 1, ymaxGroup: 'EEG_EOG', pattern: /eeg|fpz|fz|cz|pz|oz|f3|f4|c3|c4|o1|o2|a1|a2|^F\d|^C\d|^O\d|^P\d/i,
     light: '#2b2b2b', dark: '#d4cfc8' },
-  { type: 'EMG', order: 2, pattern: /emg|chin|subment/i,
+  { type: 'EMG', order: 2, ymaxGroup: 'EMG', pattern: /emg|chin|subment/i,
     light: '#c68b3f', dark: '#daa654' },
-  { type: 'ECG', order: 3, pattern: /ecg|ekg|heart/i,
+  { type: 'ECG', order: 3, ymaxGroup: 'ECG', pattern: /ecg|ekg|heart/i,
     light: '#8b3a3a', dark: '#c47070' },
-  { type: 'Resp', order: 4, pattern: /nasal|therm|thor|abdo|flow|press|resp|snore|sum/i,
+  { type: 'Resp', order: 4, ymaxGroup: 'Resp', pattern: /nasal|therm|thor|abdo|flow|press|resp|snore|sum/i,
     light: '#3e7a5e', dark: '#6db88e' },
-  { type: 'SpO2', order: 5, pattern: /spo2|sao2|oxygen/i,
+  { type: 'SpO2', order: 5, ymaxGroup: 'SpO2', pattern: /spo2|sao2|oxygen/i,
     light: '#1b4965', dark: '#5ba3d9' },
-  { type: 'Limb', order: 6, pattern: /leg|limb|plm/i,
+  { type: 'Limb', order: 6, ymaxGroup: 'Limb', pattern: /leg|limb|plm/i,
     light: '#6b4c6e', dark: '#a07ca3' },
-  { type: 'Other', order: 7, pattern: /./,
+  { type: 'Other', order: 7, ymaxGroup: 'Other', pattern: /./,
     light: '#666666', dark: '#999999' },
 ];
 
@@ -528,6 +620,10 @@ function getSignalType(chName) {
     if (st.pattern.test(chName)) return st;
   }
   return SIGNAL_TYPES[SIGNAL_TYPES.length - 1];
+}
+
+function getYmaxGroup(chName) {
+  return getSignalType(chName).ymaxGroup;
 }
 
 function getSignalColor(chName) {
@@ -578,20 +674,20 @@ function openIDB() {
     req.onerror = () => reject(req.error);
   });
 }
-async function saveFileToIDB(arrayBuffer) {
+async function saveFileToIDB(arrayBuffer, key) {
   const db = await openIDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(IDB_STORE, 'readwrite');
-    tx.objectStore(IDB_STORE).put(arrayBuffer, 'lastFile');
+    tx.objectStore(IDB_STORE).put(arrayBuffer, key);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
-async function loadFileFromIDB() {
+async function loadFileFromIDB(key) {
   const db = await openIDB();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(IDB_STORE, 'readonly');
-    const req = tx.objectStore(IDB_STORE).get('lastFile');
+    const req = tx.objectStore(IDB_STORE).get(key);
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
@@ -612,6 +708,33 @@ let duration = 0;
 let markIn = null;   // epoch index or null
 let markOut = null;  // epoch index or null
 let ctxMenuEpoch = 0; // epoch at right-click position
+
+// Fixed ymax per group: { groupName: value } or null for std-based
+let fixedYmax = {};  // e.g., { EEG_EOG: 75.0 }
+
+// Per-file settings (recent files, max 20)
+const MAX_RECENT = 20;
+function getFileSettings(fileName) {
+  const s = loadSettings();
+  return (s.recentFiles || {})[fileName] || {};
+}
+function saveFileSettings(fileName, patch) {
+  const s = loadSettings();
+  const recent = s.recentFiles || {};
+  recent[fileName] = { ...(recent[fileName] || {}), ...patch };
+  // Evict oldest if over limit
+  const keys = Object.keys(recent);
+  while (keys.length > MAX_RECENT) {
+    delete recent[keys.shift()];
+  }
+  saveSettings({ recentFiles: recent, lastFileName: fileName });
+}
+function saveCurrentFileState() {
+  if (!lastFileName) return;
+  saveFileSettings(lastFileName, {
+    markIn, markOut, epoch: currentEpoch, fixedYmax: { ...fixedYmax },
+  });
+}
 
 // Undo/Redo
 const undoStack = [];
@@ -661,10 +784,12 @@ const hypnoTime = document.getElementById('hypnoTime');
 const THEMES = {
   Midnight: {
     '--bg-deep': '#0a0e1a', '--bg-panel': '#0d1220', '--bg-surface': '#111827',
+    '--bg-waveform': '#0a0e1a',
     '--border': '#1e293b', '--text': '#e2e8f0', '--text-dim': '#64748b', '--accent': '#00d4ff',
   },
   Clinical: {
-    '--bg-deep': '#fafafa', '--bg-panel': '#f0f0f0', '--bg-surface': '#e8e8e8',
+    '--bg-deep': '#ffffff', '--bg-panel': '#ffffff', '--bg-surface': '#f5f5f5',
+    '--bg-waveform': '#fefce8',
     '--border': '#cccccc', '--text': '#1a1a1a', '--text-dim': '#666666', '--accent': '#0066cc',
   },
 };
@@ -791,18 +916,21 @@ function readDataset(ds, ranges) {
 // (4) File loading
 let lastFileName = '';
 
-async function restoreLastSession() {
+async function restoreLastSession(fileName) {
   const s = loadSettings();
-  if (!s.lastFile?.fileName) { alert('No previous session found.'); return; }
-  const buf = await loadFileFromIDB();
+  const name = fileName || s.lastFileName;
+  if (!name) { alert('No previous session found.'); return; }
+  const buf = await loadFileFromIDB(name);
   if (!buf) { alert('Cached file not found.'); return; }
-  lastFileName = s.lastFile.fileName;
+  const fs = getFileSettings(name);
+  lastFileName = name;
   await loadFile(buf, {
-    fileName: s.lastFile.fileName,
+    fileName: name,
     restore: true,
-    markIn: s.lastFile.markIn,
-    markOut: s.lastFile.markOut,
-    epoch: s.lastFile.epoch,
+    markIn: fs.markIn,
+    markOut: fs.markOut,
+    epoch: fs.epoch,
+    fixedYmax: fs.fixedYmax,
   });
 }
 
@@ -893,13 +1021,16 @@ async function loadFile(arrayBuffer, opts = {}) {
     viewer.classList.add('active');
 
     // (4.9) Restore session or navigate to first annotated epoch
+    if (opts.fileName) lastFileName = opts.fileName;
     if (opts.restore) {
       markIn = opts.markIn ?? null;
       markOut = opts.markOut ?? null;
+      fixedYmax = opts.fixedYmax ? { ...opts.fixedYmax } : {};
       currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), opts.epoch ?? 0));
     } else {
       markIn = null;
       markOut = null;
+      fixedYmax = {};
       if (annotations) {
         const firstAnnoTime = annotations.intervals[0];
         currentEpoch = Math.floor(firstAnnoTime / 30);
@@ -915,11 +1046,10 @@ async function loadFile(arrayBuffer, opts = {}) {
     drawWaveforms();
     updateEpochInfo();
 
-    // (4.10) Save session to IDB (don't await — fire and forget)
-    if (opts.fileName) lastFileName = opts.fileName;
-    if (!opts.restore) {
-      saveFileToIDB(arrayBuffer).catch(e => console.warn('IDB save failed:', e));
-      saveSettings({ lastFile: { fileName: lastFileName } });
+    // (4.10) Save session to IDB (fire and forget)
+    if (!opts.restore && lastFileName) {
+      saveFileToIDB(arrayBuffer, lastFileName).catch(e => console.warn('IDB save failed:', e));
+      saveFileSettings(lastFileName, { markIn, markOut, epoch: currentEpoch, fixedYmax: { ...fixedYmax } });
     }
 
   } catch(e) {
@@ -1060,7 +1190,7 @@ function drawWaveforms() {
   const ctx = canvas.getContext('2d');
   const w = canvas.width, h = canvas.height;
 
-  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-deep').trim();
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-waveform').trim();
   ctx.fillRect(0, 0, w, h);
 
   if (!psgFile || activeChannels.length === 0) return;
@@ -1092,68 +1222,204 @@ function drawWaveforms() {
     ctx.stroke();
   }
 
-  // (7.2) Draw each channel (sorted by signal type)
+  // (7.2) Read data and compute stats (first pass)
   const sortedActive = [...activeChannels].sort((a, b) => getSignalOrder(a) - getSignalOrder(b));
-  sortedActive.forEach((chName, chIdx) => {
+  const gainFactor = gain / 50;
+  const chData = []; // { chName, ch, data, mean, std, color, numSamples }
+
+  sortedActive.forEach((chName) => {
     const ch = channels.find(c => c.name === chName);
     if (!ch) return;
-
-    const color = getSignalColor(chName);
-    const yCenter = chIdx * chHeight + chHeight / 2;
-
-    // (7.2.1) Read data for this epoch
     const sfreq = ch.sfreq;
     const startSample = Math.floor(epochStart * sfreq);
     const numSamples = Math.floor(30 * sfreq);
     const endSample = Math.min(startSample + numSamples, ch.length);
-
     if (startSample >= ch.length) return;
 
     const ds = psgFile.get(`signals/${chName}`);
     const data = readDataset(ds, [[startSample, endSample]]);
 
-    // (7.2.2) Compute scale
-    const gainFactor = gain / 50;
-    const scale = (chHeight * 0.4 * gainFactor);
-
-    // (7.2.3) Compute data stats for normalization
     let sum = 0, sum2 = 0;
     for (let i = 0; i < data.length; i++) {
-      sum += data[i];
-      sum2 += data[i] * data[i];
+      sum += data[i]; sum2 += data[i] * data[i];
     }
     const mean = sum / data.length;
     const std = Math.sqrt(sum2 / data.length - mean * mean) || 1;
+    const color = getSignalColor(chName);
+    chData.push({ chName, ch, data, mean, std, color, numSamples, sfreq: ch.sfreq });
+  });
 
-    // (7.2.4) Draw trace
-    ctx.strokeStyle = color;
+  // (7.2.1) Resolve ymax per group: fixed or max-std within group
+  const groupStdMax = {}; // { groupName: max std }
+  chData.forEach(d => {
+    const g = getYmaxGroup(d.chName);
+    groupStdMax[g] = Math.max(groupStdMax[g] || 0, d.std);
+  });
+
+  // (7.2.2) Draw each channel
+  const channelLabelData = [];
+  chData.forEach((d, chIdx) => {
+    const group = getYmaxGroup(d.chName);
+    const isFixed = fixedYmax[group] != null;
+    // ymax = half-range in data units that maps to chHeight/2
+    const ymax = isFixed ? fixedYmax[group] : (groupStdMax[group] * 3 / gainFactor);
+
+    const yCenter = chIdx * chHeight + chHeight / 2;
+    const pxPerUnit = (chHeight / 2) / ymax; // pixels per data unit
+
+    // Draw trace
+    ctx.strokeStyle = d.color;
     ctx.lineWidth = 1.2;
     ctx.beginPath();
-
-    for (let i = 0; i < data.length; i++) {
-      const x = (i / numSamples) * w;
-      const normalized = (data[i] - mean) / std;
-      const y = yCenter - normalized * scale;
-
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
+    for (let i = 0; i < d.data.length; i++) {
+      const x = (i / d.numSamples) * w;
+      const y = yCenter - (d.data[i] - d.mean) * pxPerUnit;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
     ctx.stroke();
 
-    // (7.2.5) Channel label
-    ctx.fillStyle = color;
-    ctx.font = '11px "JetBrains Mono", monospace';
-    ctx.fillText(chName, 8, chIdx * chHeight + 16);
+    channelLabelData.push({
+      name: d.chName, sfreq: d.sfreq, color: d.color,
+      yHalfRange: ymax, group, isFixed,
+    });
   });
 
   // (7.3) Time axis
-  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  const timeColor = darkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.25)';
+  ctx.fillStyle = timeColor;
   ctx.font = '9px "JetBrains Mono", monospace';
   for (let s = 0; s <= 30; s += 5) {
     const x = (s / 30) * w;
     const t = epochStart + s;
     ctx.fillText(formatTime(t), x + 2, h - 4);
   }
+
+  // (7.4) Build left-side labels
+  buildWaveformLabels(channelLabelData, chHeight);
+}
+
+function formatYScale(val) {
+  const abs = Math.abs(val);
+  if (abs < 0.001) return (val * 1e6).toFixed(0) + ' nV';
+  if (abs < 1) return (val * 1e3).toFixed(0) + ' µV';
+  if (abs < 1000) return val.toFixed(0) + ' µV';
+  if (abs < 1e6) return (val / 1e3).toFixed(1) + ' mV';
+  return val.toFixed(0);
+}
+
+function niceRound(val) {
+  const mag = Math.pow(10, Math.floor(Math.log10(val)));
+  const norm = val / mag;
+  if (norm <= 1) return mag;
+  if (norm <= 2) return 2 * mag;
+  if (norm <= 5) return 5 * mag;
+  return 10 * mag;
+}
+
+function buildWaveformLabels(labelData, chHeight) {
+  const container = document.getElementById('waveformLabels');
+  const resizeHandle = document.getElementById('labelResize');
+  container.innerHTML = '';
+  container.appendChild(resizeHandle);
+
+  // Create tick canvas (full height of label panel)
+  const totalH = labelData.length * chHeight;
+  const tickCanvas = document.createElement('canvas');
+  tickCanvas.className = 'waveform-label-ticks';
+  tickCanvas.width = labelWidth;
+  tickCanvas.height = totalH;
+  tickCanvas.style.width = labelWidth + 'px';
+  tickCanvas.style.height = totalH + 'px';
+  container.appendChild(tickCanvas);
+
+  const tCtx = tickCanvas.getContext('2d');
+  const tickLen = 6;
+  const tickColor = darkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)';
+
+  labelData.forEach((d, i) => {
+    const yCenter = i * chHeight + chHeight / 2;
+    const isFixed = d.isFixed;
+
+    // Channel name + sfreq
+    const el = document.createElement('div');
+    el.className = 'waveform-label-item';
+    el.style.top = (i * chHeight) + 'px';
+    el.style.height = chHeight + 'px';
+    el.style.cursor = 'pointer';
+    el.title = isFixed ? 'Double-click to unfix ymax' : 'Double-click to fix ymax';
+
+    const nameSpan = document.createElement('div');
+    nameSpan.className = 'waveform-label-name';
+    nameSpan.style.color = d.color;
+    nameSpan.textContent = d.name;
+
+    const infoSpan = document.createElement('div');
+    infoSpan.className = 'waveform-label-info';
+    infoSpan.textContent = d.sfreq + ' Hz';
+
+    el.appendChild(nameSpan);
+    el.appendChild(infoSpan);
+
+    // Double-click to toggle fixed ymax for this group
+    el.ondblclick = () => {
+      if (fixedYmax[d.group] != null) {
+        delete fixedYmax[d.group];
+      } else {
+        fixedYmax[d.group] = d.yHalfRange;
+      }
+      saveCurrentFileState();
+      drawWaveforms();
+    };
+
+    container.appendChild(el);
+
+    // Tick styling: darker when fixed
+    const textColor = isFixed
+      ? (darkMode ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)')
+      : (darkMode ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.25)');
+
+    // Ticks — find a tick value that fits within the channel strip
+    const margin = 8;
+    const maxPx = chHeight / 2 - margin;
+    let tickValue = niceRound(d.yHalfRange * 0.6);
+    let tickPx = (tickValue / d.yHalfRange) * (chHeight / 2);
+    // If tick is outside, shrink until it fits — always keep one tick visible
+    while (tickPx > maxPx && tickValue > 0) {
+      tickValue = niceRound(tickValue * 0.4);
+      tickPx = (tickValue / d.yHalfRange) * (chHeight / 2);
+    }
+
+    // Center tick (line only)
+    tCtx.strokeStyle = tickColor;
+    tCtx.lineWidth = 1;
+    tCtx.beginPath();
+    tCtx.moveTo(labelWidth - tickLen, yCenter);
+    tCtx.lineTo(labelWidth, yCenter);
+    tCtx.stroke();
+
+    // ± ticks (always drawn)
+    if (tickPx > 0) {
+      const yTop = yCenter - tickPx;
+      const yBot = yCenter + tickPx;
+      const label = formatYScale(tickValue);
+
+      tCtx.strokeStyle = tickColor;
+      tCtx.beginPath();
+      tCtx.moveTo(labelWidth - tickLen, yTop);
+      tCtx.lineTo(labelWidth, yTop);
+      tCtx.stroke();
+      tCtx.beginPath();
+      tCtx.moveTo(labelWidth - tickLen, yBot);
+      tCtx.lineTo(labelWidth, yBot);
+      tCtx.stroke();
+
+      tCtx.fillStyle = textColor;
+      tCtx.font = (isFixed ? 'bold ' : '') + '9px "JetBrains Mono", monospace';
+      tCtx.textAlign = 'right';
+      tCtx.fillText(label, labelWidth - tickLen - 2, yTop + 4);
+      tCtx.fillText('-' + label, labelWidth - tickLen - 2, yBot + 4);
+    }
+  });
 }
 
 // (8) Navigation
@@ -1165,7 +1431,7 @@ function navigate(delta) {
   drawHypnogram();
   drawWaveforms();
   updateEpochInfo();
-  saveSettings({ lastFile: { fileName: lastFileName, markIn, markOut, epoch: currentEpoch } });
+  saveCurrentFileState();
 }
 
 function navigateToTime(seconds) {
@@ -1205,7 +1471,13 @@ function formatTime(seconds) {
 const HYPNO_MIN = 72, HYPNO_MAX = 128;
 let hypnoHeight = savedSettings.hypnoHeight ?? 72;
 
+const LABEL_MIN = 72, LABEL_MAX = 144;
+let labelWidth = savedSettings.labelWidth ?? 72;
+
 function resizeCanvases() {
+  // Label panel width
+  document.documentElement.style.setProperty('--label-width', labelWidth + 'px');
+
   // Hypnogram — set CSS var so body, y-axis, and canvas all share the same height
   document.documentElement.style.setProperty('--hypno-height', hypnoHeight + 'px');
   const hBody = document.querySelector('.hypnogram-body');
@@ -1265,6 +1537,30 @@ document.addEventListener('mouseup', () => {
     resizing = false;
     saveSettings({ hypnoHeight });
   }
+  if (labelResizing) {
+    labelResizing = false;
+    saveSettings({ labelWidth });
+  }
+});
+
+// Label panel resize
+const labelResizeEl = document.getElementById('labelResize');
+let labelResizing = false, labelResizeStartX = 0, labelResizeStartW = 0;
+labelResizeEl.onmousedown = (e) => {
+  labelResizing = true;
+  labelResizeStartX = e.clientX;
+  labelResizeStartW = labelWidth;
+  e.preventDefault();
+};
+document.addEventListener('mousemove', (e) => {
+  if (!labelResizing) return;
+  const delta = e.clientX - labelResizeStartX;
+  labelWidth = Math.max(LABEL_MIN, Math.min(LABEL_MAX, labelResizeStartW + delta));
+  document.documentElement.style.setProperty('--label-width', labelWidth + 'px');
+  const wRect = waveformCanvas.parentElement;
+  waveformCanvas.width = wRect.clientWidth;
+  waveformCanvas.height = wRect.clientHeight;
+  drawWaveforms();
 });
 
 // Hypnogram right-click context menu
@@ -1288,7 +1584,7 @@ function applyMarks() {
   drawHypnogram();
   drawWaveforms();
   updateEpochInfo();
-  saveSettings({ lastFile: { fileName: lastFileName, markIn, markOut, epoch: currentEpoch } });
+  saveCurrentFileState();
 }
 document.getElementById('ctxMarkIn').onclick = () => {
   pushUndo();
@@ -1384,12 +1680,37 @@ window.onresize = () => {
 // (11) Init
 initH5().then(() => {
   console.log('h5wasm ready');
-  // Show restore button if a previous session exists
+  // Build recent files list
   const s = loadSettings();
-  if (s.lastFile?.fileName) {
-    const btn = document.getElementById('restoreBtn');
-    btn.style.display = '';
-    btn.textContent = 'Restore: ' + s.lastFile.fileName;
+  const recent = s.recentFiles || {};
+  const names = Object.keys(recent);
+  if (names.length > 0) {
+    const list = document.getElementById('recentList');
+    list.style.display = '';
+    // Show most recent first (lastFileName on top, then others)
+    const sorted = [...names].sort((a, b) => {
+      if (a === s.lastFileName) return -1;
+      if (b === s.lastFileName) return 1;
+      return 0;
+    });
+    sorted.forEach(name => {
+      const item = document.createElement('div');
+      item.className = 'recent-item';
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'ri-name';
+      nameSpan.textContent = name;
+      const meta = document.createElement('span');
+      meta.className = 'ri-meta';
+      const fs = recent[name];
+      const ep = fs.epoch != null ? `ep ${fs.epoch + 1}` : '';
+      const marks = (fs.markIn != null || fs.markOut != null) ? ' ✂' : '';
+      const fixed = fs.fixedYmax && Object.keys(fs.fixedYmax).length > 0 ? ' 📌' : '';
+      meta.textContent = [ep, marks, fixed].filter(Boolean).join('');
+      item.appendChild(nameSpan);
+      item.appendChild(meta);
+      item.onclick = () => restoreLastSession(name);
+      list.appendChild(item);
+    });
   }
 }).catch(e => {
   console.error('Failed to load h5wasm:', e);
