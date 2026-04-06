@@ -174,6 +174,15 @@
     border-radius: 2px;
   }
 
+  .hypnogram-timeaxis {
+    display: flex;
+    height: 14px;
+  }
+  .hypnogram-timeaxis canvas {
+    flex: 1;
+    height: 14px;
+  }
+
   .hypnogram-resize {
     height: 6px;
     cursor: ns-resize;
@@ -521,6 +530,10 @@
       </div>
       <canvas id="hypnogramCanvas"></canvas>
     </div>
+    <div class="hypnogram-timeaxis">
+      <div style="min-width:22px;margin-right:6px"></div>
+      <canvas id="timeAxisCanvas"></canvas>
+    </div>
     <div class="hypnogram-resize" id="hypnogramResize"></div>
   </div>
 
@@ -712,6 +725,10 @@ let ctxMenuEpoch = 0; // epoch at right-click position
 // Fixed ymax per group: { groupName: value } or null for std-based
 let fixedYmax = {};  // e.g., { EEG_EOG: 75.0 }
 
+// Data cache: avoids re-reading HDF5 on every redraw
+const epochCache = {}; // { "chName:epoch": { data, mean, std } }
+function clearEpochCache() { for (const k in epochCache) delete epochCache[k]; }
+
 // Per-file settings (recent files, max 20)
 const MAX_RECENT = 20;
 function getFileSettings(fileName) {
@@ -729,11 +746,15 @@ function saveFileSettings(fileName, patch) {
   }
   saveSettings({ recentFiles: recent, lastFileName: fileName });
 }
+let _saveTimer = null;
 function saveCurrentFileState() {
   if (!lastFileName) return;
-  saveFileSettings(lastFileName, {
-    markIn, markOut, epoch: currentEpoch, fixedYmax: { ...fixedYmax },
-  });
+  if (_saveTimer) clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
+    saveFileSettings(lastFileName, {
+      markIn, markOut, epoch: currentEpoch, fixedYmax: { ...fixedYmax },
+    });
+  }, 500);
 }
 
 // Undo/Redo
@@ -936,6 +957,7 @@ async function restoreLastSession(fileName) {
 
 async function loadFile(arrayBuffer, opts = {}) {
   loading.classList.add('active');
+  clearEpochCache();
 
   try {
     if (!h5Ready) await initH5();
@@ -1173,15 +1195,83 @@ function drawHypnogram() {
     ctx.stroke();
   }
 
-  // (6.1) Draw current epoch marker
+  // (6.1) Current epoch marker — orange dashed bracket + triangle
   const mx0 = timeToX(currentEpoch * 30);
   const mx1 = timeToX(currentEpoch * 30 + 30);
+  const mxMid = (mx0 + mx1) / 2;
+  const markerColor = 'rgba(251,146,60,0.7)'; // transparent orange
 
-  ctx.fillStyle = darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+  // Subtle fill
+  ctx.fillStyle = darkMode ? 'rgba(251,146,60,0.08)' : 'rgba(251,146,60,0.1)';
   ctx.fillRect(mx0, 0, mx1 - mx0, h);
-  ctx.strokeStyle = darkMode ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(mx0, 0, mx1 - mx0, h);
+
+  // Dashed bracket lines
+  ctx.strokeStyle = markerColor;
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  ctx.moveTo(mx0, 0); ctx.lineTo(mx0, h);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(mx1, 0); ctx.lineTo(mx1, h);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+
+  // (6.2) Draw time axis (separate canvas below)
+  drawTimeAxis(tStart, tEnd, tRange, timeToX, mx0, mx1);
+}
+
+function drawTimeAxis(tStart, tEnd, tRange, timeToX, mx0, mx1) {
+  const ta = document.getElementById('timeAxisCanvas');
+  const tCtx = ta.getContext('2d');
+  const tw = ta.width, th = ta.height;
+
+  tCtx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-panel').trim();
+  tCtx.fillRect(0, 0, tw, th);
+
+  const tickTextColor = darkMode ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.35)';
+  const tickLineColor = darkMode ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)';
+
+  // Auto interval
+  let tickInterval;
+  if (tRange <= 3600) tickInterval = 300;
+  else if (tRange <= 14400) tickInterval = 1800;
+  else tickInterval = 3600;
+
+  tCtx.font = '8px "JetBrains Mono", monospace';
+  tCtx.textAlign = 'center';
+
+  const firstTick = Math.ceil(tStart / tickInterval) * tickInterval;
+  for (let t = firstTick; t < tEnd; t += tickInterval) {
+    const x = timeToX(t);
+    // Tick line
+    tCtx.strokeStyle = tickLineColor;
+    tCtx.lineWidth = 1;
+    tCtx.beginPath();
+    tCtx.moveTo(x, 0);
+    tCtx.lineTo(x, 4);
+    tCtx.stroke();
+    // Label
+    const hh = Math.floor(t / 3600);
+    const mm = Math.floor((t % 3600) / 60);
+    tCtx.fillStyle = tickTextColor;
+    tCtx.fillText(`${hh}:${String(mm).padStart(2, '0')}`, x, 12);
+  }
+
+  // Epoch marker on time axis — orange bar + triangle
+  tCtx.fillStyle = 'rgba(251,146,60,0.5)';
+  tCtx.fillRect(mx0, 0, mx1 - mx0, 3);
+
+  const mxMid = (mx0 + mx1) / 2;
+  const triH = 5, triW = 6;
+  tCtx.fillStyle = 'rgba(251,146,60,0.7)';
+  tCtx.beginPath();
+  tCtx.moveTo(mxMid - triW, triH);
+  tCtx.lineTo(mxMid + triW, triH);
+  tCtx.lineTo(mxMid, 0);
+  tCtx.closePath();
+  tCtx.fill();
 }
 
 // (7) Waveform rendering
@@ -1236,17 +1326,23 @@ function drawWaveforms() {
     const endSample = Math.min(startSample + numSamples, ch.length);
     if (startSample >= ch.length) return;
 
-    const ds = psgFile.get(`signals/${chName}`);
-    const data = readDataset(ds, [[startSample, endSample]]);
-
-    let sum = 0, sum2 = 0;
-    for (let i = 0; i < data.length; i++) {
-      sum += data[i]; sum2 += data[i] * data[i];
+    const cacheKey = `${chName}:${currentEpoch}`;
+    let cached = epochCache[cacheKey];
+    if (!cached) {
+      const ds = psgFile.get(`signals/${chName}`);
+      const data = readDataset(ds, [[startSample, endSample]]);
+      let sum = 0, sum2 = 0;
+      for (let i = 0; i < data.length; i++) {
+        sum += data[i]; sum2 += data[i] * data[i];
+      }
+      const mean = sum / data.length;
+      const std = Math.sqrt(sum2 / data.length - mean * mean) || 1;
+      cached = { data, mean, std, numSamples };
+      epochCache[cacheKey] = cached;
     }
-    const mean = sum / data.length;
-    const std = Math.sqrt(sum2 / data.length - mean * mean) || 1;
+
     const color = getSignalColor(chName);
-    chData.push({ chName, ch, data, mean, std, color, numSamples, sfreq: ch.sfreq });
+    chData.push({ chName, ch, data: cached.data, mean: cached.mean, std: cached.std, color, numSamples: cached.numSamples, sfreq: ch.sfreq });
   });
 
   // (7.2.1) Resolve ymax per group: fixed or max-std within group
@@ -1308,6 +1404,7 @@ function formatYScale(val) {
 }
 
 function niceRound(val) {
+  if (!val || !isFinite(val) || val <= 0) return 1;
   const mag = Math.pow(10, Math.floor(Math.log10(val)));
   const norm = val / mag;
   if (norm <= 1) return mag;
@@ -1316,21 +1413,68 @@ function niceRound(val) {
   return 10 * mag;
 }
 
+let prevLabelKey = '';
+
 function buildWaveformLabels(labelData, chHeight) {
   const container = document.getElementById('waveformLabels');
-  const resizeHandle = document.getElementById('labelResize');
-  container.innerHTML = '';
-  container.appendChild(resizeHandle);
+  const labelKey = labelData.map(d => d.name).join(',') + ':' + chHeight;
+  const needsFullRebuild = labelKey !== prevLabelKey;
 
-  // Create tick canvas (full height of label panel)
+  if (needsFullRebuild) {
+    prevLabelKey = labelKey;
+    const resizeHandle = document.getElementById('labelResize');
+    container.innerHTML = '';
+    container.appendChild(resizeHandle);
+
+    // Tick canvas
+    const totalH = labelData.length * chHeight;
+    const tc = document.createElement('canvas');
+    tc.id = 'labelTickCanvas';
+    tc.className = 'waveform-label-ticks';
+    container.appendChild(tc);
+
+    // Channel label divs
+    labelData.forEach((d, i) => {
+      const el = document.createElement('div');
+      el.className = 'waveform-label-item';
+      el.style.top = (i * chHeight) + 'px';
+      el.style.height = chHeight + 'px';
+      el.style.cursor = 'pointer';
+
+      const nameSpan = document.createElement('div');
+      nameSpan.className = 'waveform-label-name';
+      nameSpan.style.color = d.color;
+      nameSpan.textContent = d.name;
+
+      const infoSpan = document.createElement('div');
+      infoSpan.className = 'waveform-label-info';
+      infoSpan.textContent = d.sfreq + ' Hz';
+
+      el.appendChild(nameSpan);
+      el.appendChild(infoSpan);
+
+      el.ondblclick = () => {
+        if (fixedYmax[d.group] != null) {
+          delete fixedYmax[d.group];
+        } else {
+          fixedYmax[d.group] = d.yHalfRange;
+        }
+        saveCurrentFileState();
+        drawWaveforms();
+      };
+
+      container.appendChild(el);
+    });
+  }
+
+  // Always redraw tick canvas (fast — no DOM changes)
+  const tickCanvas = document.getElementById('labelTickCanvas');
+  if (!tickCanvas) return;
   const totalH = labelData.length * chHeight;
-  const tickCanvas = document.createElement('canvas');
-  tickCanvas.className = 'waveform-label-ticks';
   tickCanvas.width = labelWidth;
   tickCanvas.height = totalH;
   tickCanvas.style.width = labelWidth + 'px';
   tickCanvas.style.height = totalH + 'px';
-  container.appendChild(tickCanvas);
 
   const tCtx = tickCanvas.getContext('2d');
   const tickLen = 6;
@@ -1339,57 +1483,21 @@ function buildWaveformLabels(labelData, chHeight) {
   labelData.forEach((d, i) => {
     const yCenter = i * chHeight + chHeight / 2;
     const isFixed = d.isFixed;
-
-    // Channel name + sfreq
-    const el = document.createElement('div');
-    el.className = 'waveform-label-item';
-    el.style.top = (i * chHeight) + 'px';
-    el.style.height = chHeight + 'px';
-    el.style.cursor = 'pointer';
-    el.title = isFixed ? 'Double-click to unfix ymax' : 'Double-click to fix ymax';
-
-    const nameSpan = document.createElement('div');
-    nameSpan.className = 'waveform-label-name';
-    nameSpan.style.color = d.color;
-    nameSpan.textContent = d.name;
-
-    const infoSpan = document.createElement('div');
-    infoSpan.className = 'waveform-label-info';
-    infoSpan.textContent = d.sfreq + ' Hz';
-
-    el.appendChild(nameSpan);
-    el.appendChild(infoSpan);
-
-    // Double-click to toggle fixed ymax for this group
-    el.ondblclick = () => {
-      if (fixedYmax[d.group] != null) {
-        delete fixedYmax[d.group];
-      } else {
-        fixedYmax[d.group] = d.yHalfRange;
-      }
-      saveCurrentFileState();
-      drawWaveforms();
-    };
-
-    container.appendChild(el);
-
-    // Tick styling: darker when fixed
     const textColor = isFixed
       ? (darkMode ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)')
       : (darkMode ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.25)');
 
-    // Ticks — find a tick value that fits within the channel strip
     const margin = 8;
     const maxPx = chHeight / 2 - margin;
     let tickValue = niceRound(d.yHalfRange * 0.6);
-    let tickPx = (tickValue / d.yHalfRange) * (chHeight / 2);
-    // If tick is outside, shrink until it fits — always keep one tick visible
-    while (tickPx > maxPx && tickValue > 0) {
+    let tickPx = d.yHalfRange > 0 ? (tickValue / d.yHalfRange) * (chHeight / 2) : 0;
+    let guard = 0;
+    while (tickPx > maxPx && tickValue > 0 && guard++ < 15) {
       tickValue = niceRound(tickValue * 0.4);
       tickPx = (tickValue / d.yHalfRange) * (chHeight / 2);
     }
 
-    // Center tick (line only)
+    // Center tick
     tCtx.strokeStyle = tickColor;
     tCtx.lineWidth = 1;
     tCtx.beginPath();
@@ -1397,7 +1505,7 @@ function buildWaveformLabels(labelData, chHeight) {
     tCtx.lineTo(labelWidth, yCenter);
     tCtx.stroke();
 
-    // ± ticks (always drawn)
+    // ± ticks
     if (tickPx > 0) {
       const yTop = yCenter - tickPx;
       const yBot = yCenter + tickPx;
@@ -1426,19 +1534,39 @@ function buildWaveformLabels(labelData, chHeight) {
 function visibleStart() { return markIn ?? 0; }
 function visibleEnd() { return markOut ?? (totalEpochs - 1); }
 
-function navigate(delta) {
-  currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), currentEpoch + delta));
+// Epoch navigation throttle: 24fps cap for epoch-changing operations
+const EPOCH_FRAME_MS = 1000 / 24;
+let lastEpochRender = 0;
+let epochRenderPending = false;
+
+function renderEpoch() {
   drawHypnogram();
   drawWaveforms();
   updateEpochInfo();
+  lastEpochRender = Date.now();
+  epochRenderPending = false;
+}
+
+function scheduleEpochRender() {
+  if (epochRenderPending) return;
+  const elapsed = Date.now() - lastEpochRender;
+  if (elapsed >= EPOCH_FRAME_MS) {
+    renderEpoch();
+  } else {
+    epochRenderPending = true;
+    setTimeout(renderEpoch, EPOCH_FRAME_MS - elapsed);
+  }
+}
+
+function navigate(delta) {
+  currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), currentEpoch + delta));
+  scheduleEpochRender();
   saveCurrentFileState();
 }
 
 function navigateToTime(seconds) {
   currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), Math.floor(seconds / 30)));
-  drawHypnogram();
-  drawWaveforms();
-  updateEpochInfo();
+  scheduleEpochRender();
 }
 
 function updateEpochInfo() {
@@ -1481,8 +1609,14 @@ function resizeCanvases() {
   // Hypnogram — set CSS var so body, y-axis, and canvas all share the same height
   document.documentElement.style.setProperty('--hypno-height', hypnoHeight + 'px');
   const hBody = document.querySelector('.hypnogram-body');
-  hypnogramCanvas.width = hBody.clientWidth - 26;
+  const hypnoCanvasW = hBody.clientWidth - 28;
+  hypnogramCanvas.width = hypnoCanvasW;
   hypnogramCanvas.height = hypnoHeight;
+
+  // Time axis (same width as hypnogram canvas)
+  const taCanvas = document.getElementById('timeAxisCanvas');
+  taCanvas.width = hypnoCanvasW;
+  taCanvas.height = 14;
 
   // Waveform
   const wRect = waveformCanvas.parentElement;
