@@ -1455,7 +1455,13 @@ function buildChannelToggles() {
   if (fastChs.length > 0) sections.push({ label: 'FAST (30s)', chs: fastChs });
   if (slowChs.length > 0) sections.push({ label: `SLOW (${slowWindowSec >= 60 ? (slowWindowSec/60)+'min' : slowWindowSec+'s'})`, chs: slowChs });
 
-  for (const section of sections) {
+  sections.forEach((section, si) => {
+    if (si > 0) {
+      const sep = document.createElement('div');
+      sep.style.cssText = 'border-bottom:1px solid var(--border);margin:6px 0';
+      body.appendChild(sep);
+    }
+
     // Section header
     const secHeader = document.createElement('div');
     secHeader.className = 'ch-group-label';
@@ -1521,7 +1527,8 @@ function buildChannelToggles() {
         body.appendChild(item);
       });
     }
-  }
+  });
+  if (fontDelta !== 0) applyFontDelta();
 }
 
 function refreshChannelPanel() {
@@ -1991,6 +1998,7 @@ function buildWaveformLabels(labelData, chHeights) {
 
       container.appendChild(el);
     });
+    if (fontDelta !== 0) applyFontDelta();
   }
 
   // Always redraw tick canvas
@@ -2563,6 +2571,7 @@ function cmdShowH5() {
   body.innerHTML = '';
   body.appendChild(buildH5Tree(psgFile, '/'));
   panel.classList.add('active');
+  if (fontDelta !== 0) applyFontDelta();
 }
 
 function buildH5Tree(file, path) {
