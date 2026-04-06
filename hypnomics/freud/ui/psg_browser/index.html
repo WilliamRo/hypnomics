@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Morpheus</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌖</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #0a0e1a;
+    --bg-panel: #0d1220;
+    --bg-surface: #111827;
+    --border: #1e293b;
+    --text: #e2e8f0;
+    --text-dim: #64748b;
+    --accent: #00d4ff;
+    --trace-1: #00ff88;
+    --trace-2: #ff6b9d;
+    --trace-3: #ffd700;
+    --trace-4: #a78bfa;
+    --trace-5: #fb923c;
+    --trace-6: #34d399;
+    --trace-7: #f87171;
+    --stage-w: #34d399;
+    --stage-n1: #7dd3fc;
+    --stage-n2: #3b82f6;
+    --stage-n3: #1e3a5f;
+    --stage-rem: #f472b6;
+    --stage-mt: #525252;
+    --stage-unknown: #374151;
+    --grid: rgba(255,255,255,0.04);
+    --grid-major: rgba(255,255,255,0.08);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg-deep);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 20px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    min-height: 48px;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .logo {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    font-size: 14px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex;
+    gap: 12px;
+  }
+
+  .meta span { color: var(--text); }
+
+  .btn {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    color: var(--text);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* Drop zone */
+  .dropzone {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    border: 2px dashed var(--border);
+    margin: 40px;
+    border-radius: 8px;
+    transition: border-color 0.2s;
+  }
+
+  .dropzone.active { border-color: var(--accent); }
+
+  .dropzone-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+
+  .dropzone-hint {
+    font-size: 11px;
+    color: var(--text-dim);
+    opacity: 0.5;
+  }
+
+  /* Viewer (hidden until file loaded) */
+  .viewer { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .viewer.active { display: flex; }
+
+  /* Hypnogram */
+  .hypnogram-container {
+    padding: 8px 20px 0 20px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .hypnogram-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .hypnogram-body {
+    display: flex;
+    align-items: stretch;
+    height: var(--hypno-height, 50px);
+  }
+
+  .hypnogram-yaxis {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 4px 0;
+    margin-right: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    min-width: 22px;
+    text-align: right;
+  }
+
+  #hypnogramCanvas {
+    flex: 1;
+    height: 100%;
+    cursor: pointer;
+    border-radius: 2px;
+  }
+
+  .hypnogram-resize {
+    height: 6px;
+    cursor: ns-resize;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .hypnogram-resize::after {
+    content: '';
+    width: 40px;
+    height: 2px;
+    background: var(--border);
+    border-radius: 1px;
+  }
+
+  .ctx-menu {
+    display: none;
+    position: fixed;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 0;
+    z-index: 300;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    min-width: 160px;
+  }
+  .ctx-menu.active { display: block; }
+  .ctx-menu-item {
+    padding: 6px 14px;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .ctx-menu-item:hover { background: var(--bg-surface); }
+  .ctx-menu-item .shortcut { color: var(--text-dim); font-size: 10px; }
+  .ctx-menu-sep { height: 1px; background: var(--border); margin: 4px 0; }
+
+  /* Waveform area */
+  .waveform-container {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #waveformCanvas {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 20px;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border);
+    min-height: 44px;
+  }
+
+  .nav-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .nav-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    width: 32px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    color: var(--text);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .epoch-info {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    min-width: 180px;
+    text-align: center;
+  }
+
+  .epoch-info span { color: var(--text); }
+
+  .gain-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  .gain-group input[type="range"] {
+    width: 100px;
+    accent-color: var(--accent);
+  }
+
+  .channel-toggles {
+    display: flex;
+    gap: 6px;
+  }
+
+  .ch-toggle {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    padding: 3px 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .ch-toggle.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(0, 212, 255, 0.08);
+  }
+
+  /* Loading */
+  .loading {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 14, 26, 0.9);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--accent);
+  }
+
+  .loading.active { display: flex; }
+
+  input[type="file"] { display: none; }
+
+  .config-panel {
+    display: none;
+    position: fixed;
+    top: 50px;
+    right: 16px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+    z-index: 200;
+    min-width: 220px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  .config-panel.active { display: block; }
+  .config-panel h3 {
+    margin: 0 0 12px 0;
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .config-section { margin-bottom: 12px; }
+  .config-section label {
+    display: block;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .help-panel {
+    display: none;
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+    z-index: 200;
+    min-width: 240px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+  }
+  .help-panel.active { display: block; }
+  .help-panel h3 {
+    margin: 0 0 10px 0;
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 500;
+  }
+  .help-panel table { width: 100%; border-collapse: collapse; }
+  .help-panel td {
+    padding: 3px 0;
+    vertical-align: top;
+  }
+  .help-panel td:first-child {
+    color: var(--accent);
+    padding-right: 12px;
+    white-space: nowrap;
+  }
+  .help-panel td:last-child {
+    color: var(--text-dim);
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <div class="logo">Morpheus</div>
+    <div class="meta" id="fileMeta"></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:8px">
+    <button class="btn" id="openBtn">Open .psg.h5</button>
+    <input type="file" id="fileInput" accept=".h5,.hdf5,.psg.h5">
+    <button class="btn" id="configBtn" title="Settings" style="padding:6px 10px;font-size:16px">⚙</button>
+  </div>
+</div>
+
+<!-- Drop zone (shown when no file) -->
+<div class="dropzone" id="dropzone">
+  <div class="dropzone-text">Drop a .psg.h5 file here</div>
+  <div class="dropzone-hint">or click "Open .psg.h5" above</div>
+  <button class="btn" id="restoreBtn" style="margin-top:16px;display:none" onclick="restoreLastSession()">Restore last session</button>
+</div>
+
+<!-- Viewer (shown after file load) -->
+<div class="viewer" id="viewer">
+  <!-- Hypnogram -->
+  <div class="hypnogram-container" id="hypnogramContainer">
+    <div class="hypnogram-label">
+      <span>HYPNOGRAM</span>
+      <span id="hypnoTime"></span>
+    </div>
+    <div class="hypnogram-body">
+      <div class="hypnogram-yaxis" id="hypnoYAxis">
+        <span style="color:var(--stage-w)">W</span>
+        <span style="color:var(--stage-rem)">R</span>
+        <span style="color:var(--stage-n1)">N1</span>
+        <span style="color:var(--stage-n2)">N2</span>
+        <span style="color:var(--stage-n3)">N3</span>
+      </div>
+      <canvas id="hypnogramCanvas"></canvas>
+    </div>
+    <div class="hypnogram-resize" id="hypnogramResize"></div>
+  </div>
+
+  <!-- Waveforms -->
+  <div class="waveform-container">
+    <canvas id="waveformCanvas"></canvas>
+  </div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="nav-group">
+      <button class="nav-btn" id="prevBtn">&larr;</button>
+      <div class="epoch-info" id="epochInfo"></div>
+      <button class="nav-btn" id="nextBtn">&rarr;</button>
+    </div>
+    <div class="gain-group">
+      <span>Gain</span>
+      <input type="range" id="gainSlider" min="1" max="50" value="20">
+      <span id="gainValue">20</span>
+    </div>
+    <div class="channel-toggles" id="channelToggles"></div>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div class="loading" id="loading">Loading PSG file...</div>
+
+<div class="ctx-menu" id="ctxMenu">
+  <div class="ctx-menu-item" id="ctxMarkIn">Mark In</div>
+  <div class="ctx-menu-item" id="ctxMarkOut">Mark Out</div>
+  <div class="ctx-menu-sep"></div>
+  <div class="ctx-menu-item" id="ctxClearMarks">Clear Marks</div>
+</div>
+
+<div class="config-panel" id="configPanel">
+  <h3>Settings</h3>
+  <div class="config-section" style="display:flex;align-items:center;justify-content:space-between">
+    <label style="margin:0">Dark Mode</label>
+    <button class="btn" id="themeToggle" style="padding:4px 10px;font-size:14px"></button>
+  </div>
+</div>
+
+<div class="help-panel" id="helpPanel">
+  <h3>Keyboard Shortcuts</h3>
+  <table>
+    <tr><td colspan="2" style="color:var(--text-dim);font-size:10px;padding:4px 0 2px">NAVIGATION</td></tr>
+    <tr><td>← →</td><td>Prev / next epoch</td></tr>
+    <tr><td>↑ ↓</td><td>Skip 10 epochs</td></tr>
+    <tr><td colspan="2" style="color:var(--text-dim);font-size:10px;padding:8px 0 2px">HYPNOGRAM</td></tr>
+    <tr><td>Click/Drag</td><td>Scrub timeline</td></tr>
+    <tr><td>Right-click</td><td>Mark In / Mark Out</td></tr>
+    <tr><td colspan="2" style="color:var(--text-dim);font-size:10px;padding:8px 0 2px">GENERAL</td></tr>
+    <tr><td>Ctrl+Z</td><td>Undo mark</td></tr>
+    <tr><td>Ctrl+Shift+Z</td><td>Redo mark</td></tr>
+    <tr><td>?</td><td>Toggle this help</td></tr>
+  </table>
+  <hr style="border:none;border-top:1px solid var(--border);margin:10px 0 8px">
+  <div id="helpStorage" style="color:var(--text-dim);font-size:11px"></div>
+</div>
+
+<script src="lib/h5wasm.js"></script>
+<script>
+// =============================================================================
+// Morpheus — PSG Viewer
+// =============================================================================
+
+// Signal type detection and ordering (Mucha palette)
+const SIGNAL_TYPES = [
+  { type: 'EOG', order: 0, pattern: /eog|e1|e2|^E1|^E2/i,
+    light: '#1b4965', dark: '#5ba3d9' },
+  { type: 'EEG', order: 1, pattern: /eeg|fpz|fz|cz|pz|oz|f3|f4|c3|c4|o1|o2|a1|a2|^F\d|^C\d|^O\d|^P\d/i,
+    light: '#2b2b2b', dark: '#d4cfc8' },
+  { type: 'EMG', order: 2, pattern: /emg|chin|subment/i,
+    light: '#c68b3f', dark: '#daa654' },
+  { type: 'ECG', order: 3, pattern: /ecg|ekg|heart/i,
+    light: '#8b3a3a', dark: '#c47070' },
+  { type: 'Resp', order: 4, pattern: /nasal|therm|thor|abdo|flow|press|resp|snore|sum/i,
+    light: '#3e7a5e', dark: '#6db88e' },
+  { type: 'SpO2', order: 5, pattern: /spo2|sao2|oxygen/i,
+    light: '#1b4965', dark: '#5ba3d9' },
+  { type: 'Limb', order: 6, pattern: /leg|limb|plm/i,
+    light: '#6b4c6e', dark: '#a07ca3' },
+  { type: 'Other', order: 7, pattern: /./,
+    light: '#666666', dark: '#999999' },
+];
+
+function getSignalType(chName) {
+  for (const st of SIGNAL_TYPES) {
+    if (st.pattern.test(chName)) return st;
+  }
+  return SIGNAL_TYPES[SIGNAL_TYPES.length - 1];
+}
+
+function getSignalColor(chName) {
+  const st = getSignalType(chName);
+  return darkMode ? st.dark : st.light;
+}
+
+function getSignalOrder(chName) {
+  return getSignalType(chName).order;
+}
+
+// Legacy fallback
+const TRACE_COLORS = [
+  '#00ff88', '#ff6b9d', '#ffd700', '#a78bfa',
+  '#fb923c', '#34d399', '#f87171'
+];
+
+const STAGE_COLORS = {
+  0: '#34d399', // W
+  1: '#7dd3fc', // N1
+  2: '#3b82f6', // N2
+  3: '#1e3a5f', // N3
+  4: '#1e3a5f', // S4 → N3
+  5: '#f472b6', // REM
+  6: '#525252', // Movement
+  7: '#374151', // Unknown
+};
+
+const STAGE_NAMES = ['W', 'N1', 'N2', 'N3', 'S4', 'REM', 'MT', '?'];
+
+// (0) Settings persistence
+const STORAGE_KEY = 'morpheus_settings';
+function loadSettings() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch(e) { return {}; }
+}
+function saveSettings(patch) {
+  const s = { ...loadSettings(), ...patch };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+}
+
+// (0.1) IndexedDB for PSG file cache
+const IDB_NAME = 'morpheus_db', IDB_STORE = 'files';
+function openIDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(IDB_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function saveFileToIDB(arrayBuffer) {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(arrayBuffer, 'lastFile');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function loadFileFromIDB() {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readonly');
+    const req = tx.objectStore(IDB_STORE).get('lastFile');
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+// (1) State
+let psgFile = null;
+let channels = [];
+let activeChannels = [];
+let annotations = null;
+let currentEpoch = 0;
+let totalEpochs = 0;
+const savedSettings = loadSettings();
+let gain = savedSettings.gain ?? 20;
+let duration = 0;
+
+// Mark In/Out
+let markIn = null;   // epoch index or null
+let markOut = null;  // epoch index or null
+let ctxMenuEpoch = 0; // epoch at right-click position
+
+// Undo/Redo
+const undoStack = [];
+const redoStack = [];
+function pushUndo() {
+  undoStack.push({ markIn, markOut });
+  redoStack.length = 0; // clear redo on new action
+}
+function undo() {
+  if (undoStack.length === 0) return;
+  redoStack.push({ markIn, markOut });
+  const state = undoStack.pop();
+  markIn = state.markIn;
+  markOut = state.markOut;
+  currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), currentEpoch));
+  drawHypnogram(); drawWaveforms(); updateEpochInfo();
+}
+function redo() {
+  if (redoStack.length === 0) return;
+  undoStack.push({ markIn, markOut });
+  const state = redoStack.pop();
+  markIn = state.markIn;
+  markOut = state.markOut;
+  currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), currentEpoch));
+  drawHypnogram(); drawWaveforms(); updateEpochInfo();
+}
+let h5Ready = false;
+
+// (2) DOM refs
+const dropzone = document.getElementById('dropzone');
+const viewer = document.getElementById('viewer');
+const loading = document.getElementById('loading');
+const fileInput = document.getElementById('fileInput');
+const openBtn = document.getElementById('openBtn');
+const fileMeta = document.getElementById('fileMeta');
+const hypnogramCanvas = document.getElementById('hypnogramCanvas');
+const waveformCanvas = document.getElementById('waveformCanvas');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const epochInfo = document.getElementById('epochInfo');
+const gainSlider = document.getElementById('gainSlider');
+const gainValue = document.getElementById('gainValue');
+const channelToggles = document.getElementById('channelToggles');
+const hypnoTime = document.getElementById('hypnoTime');
+
+// (2.1) Color themes
+const THEMES = {
+  Midnight: {
+    '--bg-deep': '#0a0e1a', '--bg-panel': '#0d1220', '--bg-surface': '#111827',
+    '--border': '#1e293b', '--text': '#e2e8f0', '--text-dim': '#64748b', '--accent': '#00d4ff',
+  },
+  Clinical: {
+    '--bg-deep': '#fafafa', '--bg-panel': '#f0f0f0', '--bg-surface': '#e8e8e8',
+    '--border': '#cccccc', '--text': '#1a1a1a', '--text-dim': '#666666', '--accent': '#0066cc',
+  },
+};
+
+let darkMode = savedSettings.darkMode === true; // default light
+
+function applyTheme(dark) {
+  const vars = dark ? THEMES.Midnight : THEMES.Clinical;
+  const root = document.documentElement;
+  for (const [k, v] of Object.entries(vars)) root.style.setProperty(k, v);
+  document.getElementById('themeToggle').textContent = dark ? '🌚' : '🌝';
+  document.querySelector('link[rel="icon"]').href =
+    "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>" +
+    (dark ? '🌘' : '🌖') + "</text></svg>";
+  darkMode = dark;
+  saveSettings({ darkMode: dark });
+}
+
+applyTheme(darkMode);
+
+// Config button toggle
+document.getElementById('configBtn').onclick = () => {
+  document.getElementById('configPanel').classList.toggle('active');
+};
+
+// Theme toggle
+document.getElementById('themeToggle').onclick = () => {
+  applyTheme(!darkMode);
+  buildChannelToggles();
+  drawHypnogram();
+  drawWaveforms();
+};
+
+// Click outside to close panels
+document.addEventListener('click', (e) => {
+  const configPanel = document.getElementById('configPanel');
+  const configBtn = document.getElementById('configBtn');
+  if (configPanel.classList.contains('active') &&
+      !configPanel.contains(e.target) && !configBtn.contains(e.target)) {
+    configPanel.classList.remove('active');
+  }
+  const helpPanel = document.getElementById('helpPanel');
+  if (helpPanel.classList.contains('active') && !helpPanel.contains(e.target)) {
+    helpPanel.classList.remove('active');
+  }
+});
+
+// Restore saved gain to slider
+gainSlider.value = gain;
+gainValue.textContent = gain;
+
+// (2.5) Float16 → Float32 conversion utility
+function float16ToFloat32Array(uint8Buf) {
+  const u16 = new Uint16Array(uint8Buf.buffer, uint8Buf.byteOffset, uint8Buf.byteLength / 2);
+  const f32 = new Float32Array(u16.length);
+  for (let i = 0; i < u16.length; i++) {
+    const h = u16[i];
+    const sign = (h >> 15) & 1;
+    const exp = (h >> 10) & 0x1f;
+    const frac = h & 0x3ff;
+    if (exp === 0) {
+      f32[i] = (sign ? -1 : 1) * (2 ** -14) * (frac / 1024);
+    } else if (exp === 0x1f) {
+      f32[i] = frac ? NaN : (sign ? -Infinity : Infinity);
+    } else {
+      f32[i] = (sign ? -1 : 1) * (2 ** (exp - 15)) * (1 + frac / 1024);
+    }
+  }
+  return f32;
+}
+
+// (3) Init h5wasm
+async function initH5() {
+  await h5wasm.ready;
+  h5Ready = true;
+}
+
+// (3.1) Read dataset with Float16 fallback
+function readDataset(ds, ranges) {
+  const meta = ds.metadata;
+  const isFloat16 = meta.type === 1 && meta.size === 2;  // H5T_FLOAT, 2 bytes
+  if (!isFloat16) {
+    return ranges ? ds.slice(ranges) : ds.value;
+  }
+  // Manual read: get raw bytes, convert Float16 → Float32
+  const Module2 = h5wasm.Module;
+  const shape = meta.shape;
+  let total_size, count, offset, strides;
+  if (ranges) {
+    const ndim = shape.length;
+    count = new BigInt64Array(ndim);
+    offset = new BigInt64Array(ndim);
+    strides = new BigInt64Array(ndim);
+    for (let i = 0; i < ndim; i++) {
+      const r = ranges[i] || [0, shape[i]];
+      offset[i] = BigInt(r[0]);
+      count[i] = BigInt(r[1] - r[0]);
+      strides[i] = BigInt(r[2] || 1);
+    }
+    total_size = count.reduce((a, b) => a * b, 1n);
+  } else {
+    const ndim = shape.length;
+    count = new BigInt64Array(ndim);
+    offset = new BigInt64Array(ndim);
+    strides = new BigInt64Array(ndim);
+    for (let i = 0; i < ndim; i++) {
+      count[i] = BigInt(shape[i]);
+      offset[i] = 0n;
+      strides[i] = 1n;
+    }
+    total_size = count.reduce((a, b) => a * b, 1n);
+  }
+  const nbytes = 2 * Number(total_size);
+  const data_ptr = Module2._malloc(nbytes);
+  try {
+    Module2.get_dataset_data(ds.file_id, ds.path, count, offset, strides, BigInt(data_ptr));
+    const raw = Module2.HEAPU8.slice(data_ptr, data_ptr + nbytes);
+    return float16ToFloat32Array(raw);
+  } finally {
+    Module2._free(data_ptr);
+  }
+}
+
+// (4) File loading
+let lastFileName = '';
+
+async function restoreLastSession() {
+  const s = loadSettings();
+  if (!s.lastFile?.fileName) { alert('No previous session found.'); return; }
+  const buf = await loadFileFromIDB();
+  if (!buf) { alert('Cached file not found.'); return; }
+  lastFileName = s.lastFile.fileName;
+  await loadFile(buf, {
+    fileName: s.lastFile.fileName,
+    restore: true,
+    markIn: s.lastFile.markIn,
+    markOut: s.lastFile.markOut,
+    epoch: s.lastFile.epoch,
+  });
+}
+
+async function loadFile(arrayBuffer, opts = {}) {
+  loading.classList.add('active');
+
+  try {
+    if (!h5Ready) await initH5();
+
+    const FS = h5wasm.FS;
+    const File = h5wasm.File;
+    const fname = '_psg_temp.h5';
+
+    // Close previous file before loading a new one
+    if (psgFile) {
+      try { psgFile.close(); } catch(e) {}
+      try { FS.unlink(fname); } catch(e) {}
+    }
+
+    FS.writeFile(fname, new Uint8Array(arrayBuffer));
+    psgFile = new File(fname, 'r');
+
+    // (4.1) Read channels
+    channels = [];
+    const sigGroup = psgFile.get('signals');
+    const chNames = sigGroup.keys();
+    for (const name of chNames) {
+      const ds = psgFile.get(`signals/${name}`);
+      const sfreq = ds.attrs['sfreq'].value;
+      channels.push({ name, sfreq, length: ds.shape[0] });
+    }
+
+    // (4.2) Restore saved channels or default to highest sfreq
+    const maxSfreq = Math.max(...channels.map(c => c.sfreq));
+    const savedCh = savedSettings.activeChannels;
+    const availableNames = channels.map(c => c.name);
+    if (savedCh && savedCh.some(n => availableNames.includes(n))) {
+      activeChannels = savedCh.filter(n => availableNames.includes(n));
+    } else {
+      activeChannels = channels
+        .filter(c => c.sfreq === maxSfreq)
+        .map(c => c.name);
+    }
+
+    // (4.3) Compute duration and epochs
+    const mainCh = channels.find(c => c.sfreq === maxSfreq);
+    duration = mainCh.length / mainCh.sfreq;
+    totalEpochs = Math.floor(duration / 30);
+
+    // (4.4) Read annotations
+    annotations = null;
+    try {
+      const annoGroup = psgFile.get('annotations');
+      if (annoGroup) {
+        const keys = annoGroup.keys();
+        for (const key of keys) {
+          if (key.startsWith('stage')) {
+            const grp = psgFile.get(`annotations/${key}`);
+            const intervals = psgFile.get(`annotations/${key}/intervals`).value;
+            const labels = psgFile.get(`annotations/${key}/labels`).value;
+            let labelNames = [];
+            try {
+              labelNames = grp.attrs['label_names'].value;
+            } catch(e) {}
+            annotations = { intervals, labels, labelNames, key };
+            break;
+          }
+        }
+      }
+    } catch(e) { console.warn('No annotations found:', e); }
+
+    // (4.5) Read metadata
+    const label = psgFile.attrs['label']?.value || 'Unknown';
+
+    // (4.6) Update UI
+    fileMeta.innerHTML = `
+      <span>${label}</span> |
+      ${formatTime(duration)} |
+      ${maxSfreq} Hz |
+      ${channels.length} ch
+    `;
+
+    // (4.7) Build channel toggles
+    buildChannelToggles();
+
+    // (4.8) Show viewer
+    dropzone.style.display = 'none';
+    viewer.classList.add('active');
+
+    // (4.9) Restore session or navigate to first annotated epoch
+    if (opts.restore) {
+      markIn = opts.markIn ?? null;
+      markOut = opts.markOut ?? null;
+      currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), opts.epoch ?? 0));
+    } else {
+      markIn = null;
+      markOut = null;
+      if (annotations) {
+        const firstAnnoTime = annotations.intervals[0];
+        currentEpoch = Math.floor(firstAnnoTime / 30);
+      } else {
+        currentEpoch = 0;
+      }
+    }
+    undoStack.length = 0;
+    redoStack.length = 0;
+
+    resizeCanvases();
+    drawHypnogram();
+    drawWaveforms();
+    updateEpochInfo();
+
+    // (4.10) Save session to IDB (don't await — fire and forget)
+    if (opts.fileName) lastFileName = opts.fileName;
+    if (!opts.restore) {
+      saveFileToIDB(arrayBuffer).catch(e => console.warn('IDB save failed:', e));
+      saveSettings({ lastFile: { fileName: lastFileName } });
+    }
+
+  } catch(e) {
+    console.error('Failed to load file:', e);
+    alert('Failed to load file: ' + e.message);
+  } finally {
+    loading.classList.remove('active');
+  }
+}
+
+// (5) Channel toggles
+function buildChannelToggles() {
+  channelToggles.innerHTML = '';
+  // Sort channels by signal type order for the toggle buttons
+  const sorted = [...channels].sort((a, b) => getSignalOrder(a.name) - getSignalOrder(b.name));
+  sorted.forEach((ch) => {
+    const color = getSignalColor(ch.name);
+    const btn = document.createElement('button');
+    btn.className = 'ch-toggle' + (activeChannels.includes(ch.name) ? ' active' : '');
+    btn.textContent = ch.name.replace('EEG ', '').replace(' horizontal', '');
+    btn.style.borderColor = activeChannels.includes(ch.name) ? color : '';
+    btn.style.color = activeChannels.includes(ch.name) ? color : '';
+    btn.onclick = () => toggleChannel(ch.name, btn);
+    channelToggles.appendChild(btn);
+  });
+}
+
+function toggleChannel(name, btn) {
+  const color = getSignalColor(name);
+  const i = activeChannels.indexOf(name);
+  if (i >= 0) {
+    activeChannels.splice(i, 1);
+    btn.classList.remove('active');
+    btn.style.borderColor = '';
+    btn.style.color = '';
+  } else {
+    activeChannels.push(name);
+    btn.classList.add('active');
+    btn.style.borderColor = color;
+    btn.style.color = color;
+  }
+  saveSettings({ activeChannels });
+  drawWaveforms();
+}
+
+// (6) Hypnogram rendering — staircase style
+// Stage Y positions: W=0, REM=1, N1=2, N2=3, N3=4
+const STAGE_Y_MAP = { 0: 0, 5: 1, 1: 2, 2: 3, 3: 4, 4: 4 }; // stage label → row (S4→N3)
+const STAGE_ROWS = 5;
+const STAGE_LINE_COLORS = {
+  0: '#34d399', // W — green
+  5: '#f472b6', // REM — pink
+  1: '#7dd3fc', // N1
+  2: '#3b82f6', // N2
+  3: '#1e3a5f', // N3
+  4: '#1e3a5f', // S4 → N3
+};
+
+function drawHypnogram() {
+  const canvas = hypnogramCanvas;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-surface').trim();
+  ctx.fillRect(0, 0, w, h);
+
+  if (!annotations) return;
+
+  const intervals = annotations.intervals;
+  const labels = annotations.labels;
+  const pad = 4;
+  const plotH = h - pad * 2;
+
+  // Visible time range
+  const tStart = visibleStart() * 30;
+  const tEnd = (visibleEnd() + 1) * 30;
+  const tRange = tEnd - tStart;
+
+  function timeToX(t) { return ((t - tStart) / tRange) * w; }
+  function stageY(stage) {
+    const row = STAGE_Y_MAP[stage] ?? 2;
+    return pad + (row / (STAGE_ROWS - 1)) * plotH;
+  }
+
+  // Draw horizontal grid lines
+  const gridColor = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  ctx.strokeStyle = gridColor;
+  ctx.lineWidth = 0.5;
+  for (let r = 0; r < STAGE_ROWS; r++) {
+    const y = pad + (r / (STAGE_ROWS - 1)) * plotH;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+  }
+
+  // Draw staircase (only visible portion)
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < labels.length; i++) {
+    const t0 = intervals[i * 2];
+    const t1 = intervals[i * 2 + 1];
+    if (t1 <= tStart || t0 >= tEnd) continue; // skip out-of-range
+
+    const stage = labels[i];
+    const color = STAGE_LINE_COLORS[stage] || (darkMode ? '#666' : '#999');
+    const x0 = timeToX(Math.max(t0, tStart));
+    const x1 = timeToX(Math.min(t1, tEnd));
+    const y = stageY(stage);
+
+    ctx.strokeStyle = color;
+    ctx.beginPath();
+
+    // Vertical transition from previous stage
+    if (i > 0 && t0 >= tStart) {
+      const prevY = stageY(labels[i - 1]);
+      if (prevY !== y) {
+        ctx.moveTo(x0, prevY);
+        ctx.lineTo(x0, y);
+      }
+    }
+
+    ctx.moveTo(x0, y);
+    ctx.lineTo(x1, y);
+    ctx.stroke();
+  }
+
+  // (6.1) Draw current epoch marker
+  const mx0 = timeToX(currentEpoch * 30);
+  const mx1 = timeToX(currentEpoch * 30 + 30);
+
+  ctx.fillStyle = darkMode ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+  ctx.fillRect(mx0, 0, mx1 - mx0, h);
+  ctx.strokeStyle = darkMode ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(mx0, 0, mx1 - mx0, h);
+}
+
+// (7) Waveform rendering
+function drawWaveforms() {
+  const canvas = waveformCanvas;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-deep').trim();
+  ctx.fillRect(0, 0, w, h);
+
+  if (!psgFile || activeChannels.length === 0) return;
+
+  const nCh = activeChannels.length;
+  const chHeight = h / nCh;
+  const epochStart = currentEpoch * 30;
+
+  // (7.1) Draw grid
+  const gridBase = darkMode ? '255,255,255' : '0,0,0';
+  ctx.strokeStyle = `rgba(${gridBase},0.06)`;
+  ctx.lineWidth = 1;
+  // Horizontal: per channel
+  for (let i = 1; i < nCh; i++) {
+    const y = i * chHeight;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+  // Vertical: per second
+  for (let s = 0; s <= 30; s++) {
+    const x = (s / 30) * w;
+    ctx.strokeStyle = s % 5 === 0
+      ? `rgba(${gridBase},0.12)` : `rgba(${gridBase},0.04)`;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+  }
+
+  // (7.2) Draw each channel (sorted by signal type)
+  const sortedActive = [...activeChannels].sort((a, b) => getSignalOrder(a) - getSignalOrder(b));
+  sortedActive.forEach((chName, chIdx) => {
+    const ch = channels.find(c => c.name === chName);
+    if (!ch) return;
+
+    const color = getSignalColor(chName);
+    const yCenter = chIdx * chHeight + chHeight / 2;
+
+    // (7.2.1) Read data for this epoch
+    const sfreq = ch.sfreq;
+    const startSample = Math.floor(epochStart * sfreq);
+    const numSamples = Math.floor(30 * sfreq);
+    const endSample = Math.min(startSample + numSamples, ch.length);
+
+    if (startSample >= ch.length) return;
+
+    const ds = psgFile.get(`signals/${chName}`);
+    const data = readDataset(ds, [[startSample, endSample]]);
+
+    // (7.2.2) Compute scale
+    const gainFactor = gain / 50;
+    const scale = (chHeight * 0.4 * gainFactor);
+
+    // (7.2.3) Compute data stats for normalization
+    let sum = 0, sum2 = 0;
+    for (let i = 0; i < data.length; i++) {
+      sum += data[i];
+      sum2 += data[i] * data[i];
+    }
+    const mean = sum / data.length;
+    const std = Math.sqrt(sum2 / data.length - mean * mean) || 1;
+
+    // (7.2.4) Draw trace
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+
+    for (let i = 0; i < data.length; i++) {
+      const x = (i / numSamples) * w;
+      const normalized = (data[i] - mean) / std;
+      const y = yCenter - normalized * scale;
+
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // (7.2.5) Channel label
+    ctx.fillStyle = color;
+    ctx.font = '11px "JetBrains Mono", monospace';
+    ctx.fillText(chName, 8, chIdx * chHeight + 16);
+  });
+
+  // (7.3) Time axis
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  ctx.font = '9px "JetBrains Mono", monospace';
+  for (let s = 0; s <= 30; s += 5) {
+    const x = (s / 30) * w;
+    const t = epochStart + s;
+    ctx.fillText(formatTime(t), x + 2, h - 4);
+  }
+}
+
+// (8) Navigation
+function visibleStart() { return markIn ?? 0; }
+function visibleEnd() { return markOut ?? (totalEpochs - 1); }
+
+function navigate(delta) {
+  currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), currentEpoch + delta));
+  drawHypnogram();
+  drawWaveforms();
+  updateEpochInfo();
+  saveSettings({ lastFile: { fileName: lastFileName, markIn, markOut, epoch: currentEpoch } });
+}
+
+function navigateToTime(seconds) {
+  currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), Math.floor(seconds / 30)));
+  drawHypnogram();
+  drawWaveforms();
+  updateEpochInfo();
+}
+
+function updateEpochInfo() {
+  const t = currentEpoch * 30;
+  let stageStr = '';
+  if (annotations) {
+    const labels = annotations.labels;
+    const intervals = annotations.intervals;
+    for (let i = 0; i < labels.length; i++) {
+      const t0 = intervals[i * 2];
+      const t1 = intervals[i * 2 + 1];
+      if (t >= t0 && t < t1) {
+        stageStr = ` | ${STAGE_NAMES[labels[i]] || '?'}`;
+        break;
+      }
+    }
+  }
+  epochInfo.innerHTML = `Epoch <span>${currentEpoch + 1}</span> / ${totalEpochs} | ${formatTime(t)}${stageStr}`;
+  hypnoTime.textContent = formatTime(t) + ' - ' + formatTime(t + 30);
+}
+
+// (9) Helpers
+function formatTime(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+const HYPNO_MIN = 72, HYPNO_MAX = 128;
+let hypnoHeight = savedSettings.hypnoHeight ?? 72;
+
+function resizeCanvases() {
+  // Hypnogram — set CSS var so body, y-axis, and canvas all share the same height
+  document.documentElement.style.setProperty('--hypno-height', hypnoHeight + 'px');
+  const hBody = document.querySelector('.hypnogram-body');
+  hypnogramCanvas.width = hBody.clientWidth - 26;
+  hypnogramCanvas.height = hypnoHeight;
+
+  // Waveform
+  const wRect = waveformCanvas.parentElement;
+  waveformCanvas.width = wRect.clientWidth;
+  waveformCanvas.height = wRect.clientHeight;
+}
+
+// (10) Event listeners
+openBtn.onclick = () => fileInput.click();
+fileInput.onchange = async (e) => {
+  const file = e.target.files[0];
+  if (file) loadFile(await file.arrayBuffer(), { fileName: file.name });
+};
+
+// Drag and drop
+dropzone.ondragover = (e) => { e.preventDefault(); dropzone.classList.add('active'); };
+dropzone.ondragleave = () => dropzone.classList.remove('active');
+dropzone.ondrop = async (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('active');
+  const file = e.dataTransfer.files[0];
+  if (file) loadFile(await file.arrayBuffer(), { fileName: file.name });
+};
+
+// Also allow drop on the whole body
+document.body.ondragover = (e) => e.preventDefault();
+document.body.ondrop = async (e) => {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (file) loadFile(await file.arrayBuffer(), { fileName: file.name });
+};
+
+// Hypnogram resize
+const hypnogramResize = document.getElementById('hypnogramResize');
+let resizing = false, resizeStartY = 0, resizeStartH = 0;
+hypnogramResize.onmousedown = (e) => {
+  resizing = true;
+  resizeStartY = e.clientY;
+  resizeStartH = hypnoHeight;
+  e.preventDefault();
+};
+document.addEventListener('mousemove', (e) => {
+  if (!resizing) return;
+  const delta = e.clientY - resizeStartY;
+  hypnoHeight = Math.max(HYPNO_MIN, Math.min(HYPNO_MAX, resizeStartH + delta));
+  resizeCanvases();
+  drawHypnogram();
+  drawWaveforms();
+});
+document.addEventListener('mouseup', () => {
+  if (resizing) {
+    resizing = false;
+    saveSettings({ hypnoHeight });
+  }
+});
+
+// Hypnogram right-click context menu
+const ctxMenu = document.getElementById('ctxMenu');
+hypnogramCanvas.oncontextmenu = (e) => {
+  e.preventDefault();
+  const rect = hypnogramCanvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const tStart = visibleStart() * 30;
+  const tEnd = (visibleEnd() + 1) * 30;
+  const t = tStart + (x / rect.width) * (tEnd - tStart);
+  ctxMenuEpoch = Math.floor(t / 30);
+  ctxMenu.style.left = e.clientX + 'px';
+  ctxMenu.style.top = e.clientY + 'px';
+  ctxMenu.classList.add('active');
+};
+
+function applyMarks() {
+  currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), currentEpoch));
+  ctxMenu.classList.remove('active');
+  drawHypnogram();
+  drawWaveforms();
+  updateEpochInfo();
+  saveSettings({ lastFile: { fileName: lastFileName, markIn, markOut, epoch: currentEpoch } });
+}
+document.getElementById('ctxMarkIn').onclick = () => {
+  pushUndo();
+  markIn = ctxMenuEpoch;
+  if (markOut !== null && markOut < markIn) markOut = null;
+  applyMarks();
+};
+document.getElementById('ctxMarkOut').onclick = () => {
+  pushUndo();
+  markOut = ctxMenuEpoch;
+  if (markIn !== null && markIn > markOut) markIn = null;
+  applyMarks();
+};
+document.getElementById('ctxClearMarks').onclick = () => {
+  pushUndo();
+  markIn = null;
+  markOut = null;
+  applyMarks();
+};
+
+// Close context menu on click outside
+document.addEventListener('click', (e) => {
+  if (!ctxMenu.contains(e.target)) ctxMenu.classList.remove('active');
+});
+
+// Navigation
+prevBtn.onclick = () => navigate(-1);
+nextBtn.onclick = () => navigate(1);
+
+document.onkeydown = (e) => {
+  // Undo/Redo
+  if (e.key === 'z' && e.ctrlKey && !e.shiftKey) { e.preventDefault(); undo(); return; }
+  if (e.key === 'Z' && e.ctrlKey && e.shiftKey) { e.preventDefault(); redo(); return; }
+
+  if (e.key === 'ArrowLeft') navigate(-1);
+  if (e.key === 'ArrowRight') navigate(1);
+  if (e.key === 'ArrowUp') navigate(-10);
+  if (e.key === 'ArrowDown') navigate(10);
+  if (e.key === '?') {
+    const panel = document.getElementById('helpPanel');
+    panel.classList.toggle('active');
+    if (panel.classList.contains('active')) {
+      let used = 0;
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        used += k.length + localStorage.getItem(k).length;
+      }
+      const total = 5 * 1024 * 1024; // 5 MB typical limit
+      document.getElementById('helpStorage').textContent =
+        `localStorage: ${(used / 1024).toFixed(1)} KB / ${(total / 1024 / 1024).toFixed(0)} MB`;
+    }
+  }
+};
+
+// Hypnogram click + drag
+let hypnoDragging = false;
+function hypnoJump(e) {
+  const rect = hypnogramCanvas.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const tStart = visibleStart() * 30;
+  const tEnd = (visibleEnd() + 1) * 30;
+  const t = tStart + (x / rect.width) * (tEnd - tStart);
+  navigateToTime(t);
+}
+hypnogramCanvas.onmousedown = (e) => {
+  hypnoDragging = true;
+  hypnoJump(e);
+};
+document.addEventListener('mousemove', (e) => {
+  if (hypnoDragging) hypnoJump(e);
+});
+document.addEventListener('mouseup', () => {
+  hypnoDragging = false;
+});
+
+// Gain
+gainSlider.oninput = () => {
+  gain = parseInt(gainSlider.value);
+  gainValue.textContent = gain;
+  saveSettings({ gain });
+  drawWaveforms();
+};
+
+// Resize
+window.onresize = () => {
+  if (psgFile) {
+    resizeCanvases();
+    drawHypnogram();
+    drawWaveforms();
+  }
+};
+
+// (11) Init
+initH5().then(() => {
+  console.log('h5wasm ready');
+  // Show restore button if a previous session exists
+  const s = loadSettings();
+  if (s.lastFile?.fileName) {
+    const btn = document.getElementById('restoreBtn');
+    btn.style.display = '';
+    btn.textContent = 'Restore: ' + s.lastFile.fileName;
+  }
+}).catch(e => {
+  console.error('Failed to load h5wasm:', e);
+});
+</script>
+</body>
+</html>
