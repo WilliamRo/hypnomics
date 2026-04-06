@@ -398,6 +398,150 @@
 
   input[type="file"] { display: none; }
 
+  /* Command bar */
+  .cmd-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 400;
+    background: rgba(0,0,0,0.3);
+  }
+  .cmd-overlay.active { display: flex; justify-content: center; padding-top: 80px; }
+  .cmd-bar {
+    width: 380px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    overflow: hidden;
+    height: fit-content;
+  }
+  .cmd-input-wrap {
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .cmd-input-wrap::before {
+    content: ':';
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: var(--accent);
+    margin-right: 6px;
+  }
+  .cmd-input, .cmd-shadow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    padding: 10px 0;
+  }
+  .cmd-input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    position: relative;
+    z-index: 1;
+  }
+  .cmd-shadow {
+    position: absolute;
+    left: 26px; /* :prefix + padding */
+    color: var(--text-dim);
+    opacity: 0.4;
+    pointer-events: none;
+    white-space: pre;
+  }
+  .cmd-dropdown {
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .cmd-item {
+    padding: 6px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+  }
+  .cmd-item:hover, .cmd-item.active { background: var(--bg-surface); }
+  .cmd-item .cmd-hint { color: var(--text-dim); font-size: 10px; }
+  .cmd-match { color: var(--accent); font-weight: 600; }
+
+  /* Side panel */
+  .side-panel {
+    display: none;
+    position: fixed;
+    top: 0; right: 0; bottom: 0;
+    width: var(--side-panel-width, 340px);
+    background: var(--bg-panel);
+    border-left: 1px solid var(--border);
+    z-index: 150;
+    flex-direction: column;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.3);
+  }
+  .side-panel.active { display: flex; }
+  .side-panel-resize {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 4px;
+    cursor: ew-resize;
+    z-index: 10;
+  }
+  .side-panel-resize:hover { background: var(--accent); opacity: 0.3; }
+  .side-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .side-panel-close {
+    background: none; border: none; color: var(--text-dim);
+    font-size: 16px; cursor: pointer; padding: 0 4px;
+  }
+  .side-panel-close:hover { color: var(--text); }
+  .side-panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text);
+  }
+
+  /* H5 tree */
+  .h5-node { margin-left: 14px; }
+  .h5-group {
+    cursor: pointer;
+    color: var(--accent);
+    padding: 2px 0;
+  }
+  .h5-group:hover { text-decoration: underline; }
+  .h5-group::before { content: '▸ '; font-size: 9px; }
+  .h5-group.open::before { content: '▾ '; }
+  .h5-dataset {
+    color: var(--text);
+    padding: 2px 0;
+  }
+  .h5-dataset::before { content: '◇ '; font-size: 9px; color: var(--text-dim); }
+  .h5-attr {
+    color: var(--text-dim);
+    font-size: 10px;
+    padding: 1px 0 1px 16px;
+  }
+  .h5-attr::before { content: '@ '; }
+  .h5-meta {
+    color: var(--text-dim);
+    font-size: 10px;
+    margin-left: 6px;
+  }
+
   .recent-item {
     display: flex;
     align-items: center;
@@ -595,10 +739,33 @@
     <tr><td colspan="2" style="color:var(--text-dim);font-size:10px;padding:8px 0 2px">GENERAL</td></tr>
     <tr><td>Ctrl+Z</td><td>Undo mark</td></tr>
     <tr><td>Ctrl+Shift+Z</td><td>Redo mark</td></tr>
+    <tr><td>t</td><td>Toggle H5 tree panel</td></tr>
+    <tr><td>:</td><td>Command palette</td></tr>
     <tr><td>?</td><td>Toggle this help</td></tr>
   </table>
   <hr style="border:none;border-top:1px solid var(--border);margin:10px 0 8px">
   <div id="helpStorage" style="color:var(--text-dim);font-size:11px"></div>
+</div>
+
+<!-- Command bar -->
+<div class="cmd-overlay" id="cmdOverlay">
+  <div class="cmd-bar">
+    <div class="cmd-input-wrap">
+      <span class="cmd-shadow" id="cmdShadow"></span>
+      <input class="cmd-input" id="cmdInput" type="text" placeholder="command..." autocomplete="off" />
+    </div>
+    <div class="cmd-dropdown" id="cmdDropdown"></div>
+  </div>
+</div>
+
+<!-- Side panel -->
+<div class="side-panel" id="sidePanel">
+  <div class="side-panel-resize" id="sidePanelResize"></div>
+  <div class="side-panel-header">
+    <span id="sidePanelTitle">H5 Structure</span>
+    <button class="side-panel-close" id="sidePanelClose">&times;</button>
+  </div>
+  <div class="side-panel-body" id="sidePanelBody"></div>
 </div>
 
 <script src="lib/h5wasm.js"></script>
@@ -654,18 +821,96 @@ const TRACE_COLORS = [
   '#fb923c', '#34d399', '#f87171'
 ];
 
-const STAGE_COLORS = {
-  0: '#34d399', // W
-  1: '#7dd3fc', // N1
-  2: '#3b82f6', // N2
-  3: '#1e3a5f', // N3
-  4: '#1e3a5f', // S4 → N3
-  5: '#f472b6', // REM
-  6: '#525252', // Movement
-  7: '#374151', // Unknown
+// Dynamic stage mapping — built from label_names in h5 file
+// Canonical AASM rows: W=0, R=1, N1=2, N2=3, N3=4
+// Map stage name → AASM row. Matched by patterns, not exact strings.
+const STAGE_NAME_PATTERNS = [
+  { row: 0, patterns: [/\bw(ake)?\b/i, /\bwakefulness\b/i] },
+  { row: 1, patterns: [/\br(em)?\b/i] },
+  { row: 2, patterns: [/\bn1\b/i, /\bs(tage)?\s*1\b/i] },
+  { row: 3, patterns: [/\bn2\b/i, /\bs(tage)?\s*2\b/i] },
+  { row: 4, patterns: [/\bn3\b/i, /\bs(tage)?\s*3\b/i, /\bs(tage)?\s*4\b/i, /\bsws\b/i, /\bn4\b/i, /\bs4\b/i] },
+];
+
+function matchStageRow(name) {
+  for (const { row, patterns } of STAGE_NAME_PATTERNS) {
+    for (const p of patterns) {
+      if (p.test(name)) return row;
+    }
+  }
+  return undefined; // unknown → gap
+}
+const STAGE_COLOR_BY_ROW = {
+  0: '#34d399', // W — green
+  1: '#f472b6', // REM — pink
+  2: '#7dd3fc', // N1
+  3: '#3b82f6', // N2
+  4: '#1e3a5f', // N3
+};
+const STAGE_SHORT_BY_ROW = { 0: 'W', 1: 'R', 2: 'N1', 3: 'N2', 4: 'N3' };
+const STAGE_ROWS = 5;
+
+// Built per-file from label_names: { labelInt: { row, color, name } }
+let stageMap = {};
+
+// Fallback mappings for common conventions when label_names is absent
+const FALLBACK_MAPS = {
+  // R&K / SC convention: 0=W, 1=N1, 2=N2, 3=N3, 4=S4, 5=REM, 6=MT, 7=?
+  rk: { 0: 'w', 1: 'n1', 2: 'n2', 3: 'n3', 4: 's4', 5: 'rem', 6: 'mt', 7: 'unknown' },
+  // AASM convention: 0=W, 1=N1, 2=N2, 3=N3, 4=REM, 5=Unknown
+  aasm: { 0: 'wake', 1: 'n1', 2: 'n2', 3: 'n3', 4: 'rem', 5: 'unknown' },
 };
 
-const STAGE_NAMES = ['W', 'N1', 'N2', 'N3', 'S4', 'REM', 'MT', '?'];
+function buildStageMap(labelNames) {
+  stageMap = {};
+
+  // Try to use label_names from the file
+  let names = [];
+  if (labelNames && labelNames.length > 0) {
+    for (let i = 0; i < labelNames.length; i++) {
+      names.push((typeof labelNames[i] === 'string' ? labelNames[i] : String(labelNames[i])).trim());
+    }
+  }
+
+  // If no label_names, detect convention from unique labels
+  if (names.length === 0 && annotations && annotations.labels) {
+    const unique = new Set(annotations.labels);
+    const maxLabel = Math.max(...unique);
+    const fb = maxLabel >= 5 ? FALLBACK_MAPS.rk : FALLBACK_MAPS.aasm;
+    for (const [k, v] of Object.entries(fb)) {
+      names[parseInt(k)] = v;
+    }
+  }
+
+  for (let i = 0; i < names.length; i++) {
+    if (!names[i]) continue;
+    const row = matchStageRow(names[i]);
+    if (row !== undefined) {
+      stageMap[i] = { row, color: STAGE_COLOR_BY_ROW[row], name: STAGE_SHORT_BY_ROW[row] };
+    }
+  }
+}
+
+function stageRow(labelInt) {
+  return stageMap[labelInt]?.row;
+}
+function stageColor(labelInt) {
+  return stageMap[labelInt]?.color;
+}
+function stageName(labelInt) {
+  return stageMap[labelInt]?.name || '?';
+}
+
+function updateHypnoYAxis() {
+  const el = document.getElementById('hypnoYAxis');
+  el.innerHTML = '';
+  for (let r = 0; r < STAGE_ROWS; r++) {
+    const span = document.createElement('span');
+    span.style.color = STAGE_COLOR_BY_ROW[r] || 'var(--text-dim)';
+    span.textContent = STAGE_SHORT_BY_ROW[r] || '';
+    el.appendChild(span);
+  }
+}
 
 // (0) Settings persistence
 const STORAGE_KEY = 'morpheus_settings';
@@ -1018,6 +1263,8 @@ async function loadFile(arrayBuffer, opts = {}) {
               labelNames = grp.attrs['label_names'].value;
             } catch(e) {}
             annotations = { intervals, labels, labelNames, key };
+            buildStageMap(labelNames);
+            updateHypnoYAxis();
             break;
           }
         }
@@ -1119,16 +1366,7 @@ function toggleChannel(name, btn) {
 
 // (6) Hypnogram rendering — staircase style
 // Stage Y positions: W=0, REM=1, N1=2, N2=3, N3=4
-const STAGE_Y_MAP = { 0: 0, 5: 1, 1: 2, 2: 3, 3: 4, 4: 4 }; // stage label → row (S4→N3)
-const STAGE_ROWS = 5;
-const STAGE_LINE_COLORS = {
-  0: '#34d399', // W — green
-  5: '#f472b6', // REM — pink
-  1: '#7dd3fc', // N1
-  2: '#3b82f6', // N2
-  3: '#1e3a5f', // N3
-  4: '#1e3a5f', // S4 → N3
-};
+// (Hardcoded stage constants removed — now using dynamic stageMap)
 
 function drawHypnogram() {
   const canvas = hypnogramCanvas;
@@ -1151,8 +1389,7 @@ function drawHypnogram() {
   const tRange = tEnd - tStart;
 
   function timeToX(t) { return ((t - tStart) / tRange) * w; }
-  function stageY(stage) {
-    const row = STAGE_Y_MAP[stage] ?? 2;
+  function stageYFromRow(row) {
     return pad + (row / (STAGE_ROWS - 1)) * plotH;
   }
 
@@ -1165,34 +1402,35 @@ function drawHypnogram() {
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
   }
 
-  // Draw staircase (only visible portion)
+  // Draw staircase (only visible portion, skip unknown stages)
   ctx.lineWidth = 1.5;
+  let prevDrawnRow = null;
   for (let i = 0; i < labels.length; i++) {
     const t0 = intervals[i * 2];
     const t1 = intervals[i * 2 + 1];
-    if (t1 <= tStart || t0 >= tEnd) continue; // skip out-of-range
+    if (t1 <= tStart || t0 >= tEnd) continue;
 
-    const stage = labels[i];
-    const color = STAGE_LINE_COLORS[stage] || (darkMode ? '#666' : '#999');
+    const row = stageRow(labels[i]);
+    if (row === undefined) { prevDrawnRow = null; continue; } // gap for unknown
+
+    const color = stageColor(labels[i]);
     const x0 = timeToX(Math.max(t0, tStart));
     const x1 = timeToX(Math.min(t1, tEnd));
-    const y = stageY(stage);
+    const y = stageYFromRow(row);
 
     ctx.strokeStyle = color;
     ctx.beginPath();
 
-    // Vertical transition from previous stage
-    if (i > 0 && t0 >= tStart) {
-      const prevY = stageY(labels[i - 1]);
-      if (prevY !== y) {
-        ctx.moveTo(x0, prevY);
-        ctx.lineTo(x0, y);
-      }
+    // Vertical transition from previous known stage
+    if (prevDrawnRow !== null && prevDrawnRow !== row && t0 >= tStart) {
+      ctx.moveTo(x0, stageYFromRow(prevDrawnRow));
+      ctx.lineTo(x0, y);
     }
 
     ctx.moveTo(x0, y);
     ctx.lineTo(x1, y);
     ctx.stroke();
+    prevDrawnRow = row;
   }
 
   // (6.1) Current epoch marker — orange dashed bracket + triangle
@@ -1414,8 +1652,10 @@ function niceRound(val) {
 }
 
 let prevLabelKey = '';
+let currentLabelData = []; // live reference for double-click handlers
 
 function buildWaveformLabels(labelData, chHeight) {
+  currentLabelData = labelData; // keep live reference
   const container = document.getElementById('waveformLabels');
   const labelKey = labelData.map(d => d.name).join(',') + ':' + chHeight;
   const needsFullRebuild = labelKey !== prevLabelKey;
@@ -1453,15 +1693,17 @@ function buildWaveformLabels(labelData, chHeight) {
       el.appendChild(nameSpan);
       el.appendChild(infoSpan);
 
-      el.ondblclick = () => {
-        if (fixedYmax[d.group] != null) {
-          delete fixedYmax[d.group];
+      el.ondblclick = ((idx) => () => {
+        const live = currentLabelData[idx];
+        if (!live) return;
+        if (fixedYmax[live.group] != null) {
+          delete fixedYmax[live.group];
         } else {
-          fixedYmax[d.group] = d.yHalfRange;
+          fixedYmax[live.group] = live.yHalfRange;
         }
         saveCurrentFileState();
         drawWaveforms();
-      };
+      })(i);
 
       container.appendChild(el);
     });
@@ -1579,7 +1821,7 @@ function updateEpochInfo() {
       const t0 = intervals[i * 2];
       const t1 = intervals[i * 2 + 1];
       if (t >= t0 && t < t1) {
-        stageStr = ` | ${STAGE_NAMES[labels[i]] || '?'}`;
+        stageStr = ` | ${stageName(labels[i])}`;
         break;
       }
     }
@@ -1749,6 +1991,26 @@ prevBtn.onclick = () => navigate(-1);
 nextBtn.onclick = () => navigate(1);
 
 document.onkeydown = (e) => {
+  // Command palette
+  if (e.key === ':' && !cmdBarOpen && document.activeElement === document.body) {
+    e.preventDefault(); openCmdBar(); return;
+  }
+  if (cmdBarOpen) return; // let cmd input handle its own keys
+
+  // Esc closes side panel
+  if (e.key === 'Escape') {
+    const sp = document.getElementById('sidePanel');
+    if (sp.classList.contains('active')) { sp.classList.remove('active'); return; }
+  }
+
+  // T toggles h5 tree panel
+  if (e.key === 't' || e.key === 'T') {
+    const sp = document.getElementById('sidePanel');
+    if (sp.classList.contains('active')) { sp.classList.remove('active'); }
+    else { cmdShowH5(); }
+    return;
+  }
+
   // Undo/Redo
   if (e.key === 'z' && e.ctrlKey && !e.shiftKey) { e.preventDefault(); undo(); return; }
   if (e.key === 'Z' && e.ctrlKey && e.shiftKey) { e.preventDefault(); redo(); return; }
@@ -1810,6 +2072,232 @@ window.onresize = () => {
     drawWaveforms();
   }
 };
+
+// (12) Command palette
+const COMMANDS = [
+  { name: 'showh5', hint: 'Show .h5 file structure', fn: cmdShowH5 },
+];
+
+let cmdBarOpen = false;
+let cmdActiveIdx = 0;
+
+function openCmdBar() {
+  cmdBarOpen = true;
+  const overlay = document.getElementById('cmdOverlay');
+  const input = document.getElementById('cmdInput');
+  overlay.classList.add('active');
+  input.value = '';
+  cmdActiveIdx = 0;
+  updateCmdDropdown('');
+  input.focus();
+}
+
+function closeCmdBar() {
+  cmdBarOpen = false;
+  document.getElementById('cmdOverlay').classList.remove('active');
+  document.getElementById('cmdInput').blur();
+  document.getElementById('cmdShadow').textContent = '';
+}
+
+function highlightMatch(name, query) {
+  if (!query) return name;
+  const idx = name.toLowerCase().indexOf(query.toLowerCase());
+  if (idx < 0) return name;
+  return name.slice(0, idx) + `<span class="cmd-match">${name.slice(idx, idx + query.length)}</span>` + name.slice(idx + query.length);
+}
+
+function updateCmdDropdown(query) {
+  const dd = document.getElementById('cmdDropdown');
+  const shadow = document.getElementById('cmdShadow');
+  dd.innerHTML = '';
+  const q = query.toLowerCase().trim();
+  const filtered = q ? COMMANDS.filter(c => c.name.includes(q)) : COMMANDS;
+  cmdActiveIdx = Math.min(cmdActiveIdx, Math.max(0, filtered.length - 1));
+
+  // Shadow hint: show the active command's full name
+  if (filtered.length > 0 && q) {
+    const hint = filtered[cmdActiveIdx].name;
+    shadow.textContent = hint;
+  } else {
+    shadow.textContent = '';
+  }
+
+  filtered.forEach((cmd, i) => {
+    const el = document.createElement('div');
+    el.className = 'cmd-item' + (i === cmdActiveIdx ? ' active' : '');
+    el.innerHTML = `<span>${highlightMatch(cmd.name, q)}</span><span class="cmd-hint">${cmd.hint}</span>`;
+    el.onclick = () => { closeCmdBar(); cmd.fn(); };
+    dd.appendChild(el);
+  });
+}
+
+function executeCmdByIndex(filtered) {
+  if (filtered.length > 0 && cmdActiveIdx < filtered.length) {
+    closeCmdBar();
+    filtered[cmdActiveIdx].fn();
+  }
+}
+
+// Command bar input events
+document.getElementById('cmdInput').addEventListener('input', (e) => {
+  cmdActiveIdx = 0;
+  updateCmdDropdown(e.target.value);
+});
+
+document.getElementById('cmdInput').addEventListener('keydown', (e) => {
+  const q = e.target.value.toLowerCase().trim();
+  const filtered = q ? COMMANDS.filter(c => c.name.includes(q)) : COMMANDS;
+  if (e.key === 'ArrowDown') { e.preventDefault(); cmdActiveIdx = Math.min(cmdActiveIdx + 1, filtered.length - 1); updateCmdDropdown(q); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); cmdActiveIdx = Math.max(cmdActiveIdx - 1, 0); updateCmdDropdown(q); }
+  else if (e.key === 'Tab') {
+    e.preventDefault();
+    if (filtered.length > 0) {
+      e.target.value = filtered[cmdActiveIdx].name;
+      updateCmdDropdown(filtered[cmdActiveIdx].name);
+    }
+  }
+  else if (e.key === 'Enter') { e.preventDefault(); executeCmdByIndex(filtered); }
+  else if (e.key === 'Escape') { e.preventDefault(); closeCmdBar(); }
+});
+
+// Click overlay to close
+document.getElementById('cmdOverlay').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('cmdOverlay')) closeCmdBar();
+});
+
+// Side panel close
+document.getElementById('sidePanelClose').onclick = () => {
+  document.getElementById('sidePanel').classList.remove('active');
+};
+
+// Side panel resize
+const SIDE_MIN = 240, SIDE_MAX = 600;
+let sidePanelWidth = savedSettings.sidePanelWidth ?? 340;
+document.documentElement.style.setProperty('--side-panel-width', sidePanelWidth + 'px');
+
+let sideResizing = false, sideResizeStartX = 0, sideResizeStartW = 0;
+document.getElementById('sidePanelResize').onmousedown = (e) => {
+  sideResizing = true;
+  sideResizeStartX = e.clientX;
+  sideResizeStartW = sidePanelWidth;
+  e.preventDefault();
+};
+document.addEventListener('mousemove', (e) => {
+  if (!sideResizing) return;
+  const delta = sideResizeStartX - e.clientX; // dragging left = wider
+  sidePanelWidth = Math.max(SIDE_MIN, Math.min(SIDE_MAX, sideResizeStartW + delta));
+  document.documentElement.style.setProperty('--side-panel-width', sidePanelWidth + 'px');
+});
+document.addEventListener('mouseup', () => {
+  if (sideResizing) {
+    sideResizing = false;
+    saveSettings({ sidePanelWidth });
+  }
+});
+
+// (12.1) showh5 command
+function cmdShowH5() {
+  if (!psgFile) { alert('No file loaded.'); return; }
+  const panel = document.getElementById('sidePanel');
+  const body = document.getElementById('sidePanelBody');
+  document.getElementById('sidePanelTitle').textContent = 'H5 Structure — ' + (lastFileName || 'unknown');
+  body.innerHTML = '';
+  body.appendChild(buildH5Tree(psgFile, '/'));
+  panel.classList.add('active');
+}
+
+function buildH5Tree(file, path) {
+  const frag = document.createDocumentFragment();
+  let node;
+  try { node = path === '/' ? file : file.get(path); } catch(e) { return frag; }
+  if (!node) return frag;
+
+  // Attributes
+  if (node.attrs) {
+    try {
+      const attrKeys = Object.keys(node.attrs);
+      attrKeys.forEach(key => {
+        const attr = document.createElement('div');
+        attr.className = 'h5-attr';
+        let val;
+        try { val = node.attrs[key].value; } catch(e) { val = '(unreadable)'; }
+        if (val instanceof Float64Array || val instanceof Float32Array || val instanceof Int32Array) {
+          val = val.length <= 6 ? Array.from(val).join(', ') : `[${val.length} values]`;
+        }
+        if (typeof val === 'string' && val.length > 50) val = val.slice(0, 50) + '...';
+        attr.textContent = `${key}: ${val}`;
+        frag.appendChild(attr);
+      });
+    } catch(e) {}
+  }
+
+  // Children (groups and datasets)
+  let keys;
+  try { keys = node.keys(); } catch(e) { return frag; }
+
+  keys.forEach(key => {
+    const childPath = path === '/' ? key : path + '/' + key;
+    let child;
+    try { child = file.get(childPath); } catch(e) { return; }
+    if (!child) return;
+
+    const isGroup = child.keys !== undefined;
+
+    if (isGroup) {
+      // Group
+      const groupEl = document.createElement('div');
+      groupEl.className = 'h5-group';
+      groupEl.textContent = key + '/';
+
+      const childrenEl = document.createElement('div');
+      childrenEl.className = 'h5-node';
+      childrenEl.style.display = 'none';
+
+      groupEl.onclick = (e) => {
+        e.stopPropagation();
+        const open = groupEl.classList.toggle('open');
+        childrenEl.style.display = open ? '' : 'none';
+        if (open && childrenEl.children.length === 0) {
+          childrenEl.appendChild(buildH5Tree(file, childPath));
+        }
+      };
+
+      frag.appendChild(groupEl);
+      frag.appendChild(childrenEl);
+    } else {
+      // Dataset
+      const dsEl = document.createElement('div');
+      dsEl.className = 'h5-dataset';
+      let meta = '';
+      try {
+        const shape = child.shape;
+        const dtype = child.dtype;
+        meta = `[${shape.join('×')}] ${dtype}`;
+      } catch(e) {}
+      dsEl.innerHTML = `${key}<span class="h5-meta">${meta}</span>`;
+
+      // Dataset attrs
+      const dsAttrs = document.createDocumentFragment();
+      if (child.attrs) {
+        try {
+          Object.keys(child.attrs).forEach(ak => {
+            const attr = document.createElement('div');
+            attr.className = 'h5-attr';
+            let val;
+            try { val = child.attrs[ak].value; } catch(e) { val = '(unreadable)'; }
+            attr.textContent = `${ak}: ${val}`;
+            dsAttrs.appendChild(attr);
+          });
+        } catch(e) {}
+      }
+
+      frag.appendChild(dsEl);
+      frag.appendChild(dsAttrs);
+    }
+  });
+
+  return frag;
+}
 
 // (11) Init
 initH5().then(() => {
