@@ -27,12 +27,25 @@ function drawGrid(ctx, w, h, nCh, chHeight, tDuration, gridBase) {
 }
 
 // Shared: draw traces on a canvas
-function drawTraces(ctx, w, chDataList, chHeight, gainFactor, groupStdMax) {
+function drawTraces(ctx, w, chDataList, chHeight) {
   const labelData = [];
   chDataList.forEach((d, chIdx) => {
     const group = getYmaxGroup(d.chName);
-    const isFixed = fixedYmax[group] != null;
-    const ymax = isFixed ? fixedYmax[group] : (groupStdMax[group] * 3 / gainFactor);
+    const isPinned = pinnedChannels[d.chName] != null;
+    const isIsolated = isolatedChannels[d.chName] === true;
+    const isFixed = isPinned;
+
+    let ymax;
+    if (isPinned) {
+      ymax = pinnedChannels[d.chName];
+    } else if (autoScaleGlobal && globalYmax[d.chName]) {
+      // Global 99th percentile (precomputed for entire recording)
+      ymax = globalYmax[d.chName];
+    } else {
+      // Per-epoch std-based (default when auto-scale is OFF)
+      ymax = d.std * 3;
+      if (ymax <= 0) ymax = 1;
+    }
     const yCenter = chIdx * chHeight + chHeight / 2;
     const pxPerUnit = (chHeight / 2) / ymax;
 
@@ -68,7 +81,9 @@ function drawTraces(ctx, w, chDataList, chHeight, gainFactor, groupStdMax) {
     }
     ctx.stroke();
 
-    labelData.push({ name: d.chName, sfreq: d.sfreq, color: d.color, yHalfRange: ymax, group, isFixed });
+    const ch = channels.find(c => c.name === d.chName);
+    const unit = ch?.unit || '';
+    labelData.push({ name: d.chName, sfreq: d.sfreq, color: d.color, yHalfRange: ymax, group, isFixed, isPinned, isIsolated, unit });
   });
   return labelData;
 }
@@ -116,7 +131,6 @@ function drawWaveforms() {
 
   const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-waveform').trim();
   const gridBase = darkMode ? '255,255,255' : '0,0,0';
-  const gainFactor = gain / 50;
   const epochStart = viewStartSec;
 
   let allLabelData = [];
@@ -132,13 +146,7 @@ function drawWaveforms() {
     drawGrid(ctx, w, h, fastChs.length, chHeight, fastWindowSec, gridBase);
 
     const fastData = fastChs.map(n => readChannelData(n, epochStart, fastWindowSec)).filter(Boolean);
-    const groupStdMax = {};
-    fastData.forEach(d => {
-      const g = getYmaxGroup(d.chName);
-      groupStdMax[g] = Math.max(groupStdMax[g] || 0, d.std);
-    });
-
-    const labelData = drawTraces(ctx, w, fastData, chHeight, gainFactor, groupStdMax);
+    const labelData = drawTraces(ctx, w, fastData, chHeight);
     allLabelData.push(...labelData);
 
     // Time axis
@@ -170,7 +178,7 @@ function drawWaveforms() {
     if (slowEnd > duration) { slowEnd = duration; slowStart = Math.max(0, slowEnd - slowWindowSec); }
 
     // Cache key for slow traces
-    const slowKey = `${slowStart}:${slowWindowSec}:${w}:${h}:${slowChs.join(',')}:${gainFactor}:${darkMode}`;
+    const slowKey = `${slowStart}:${slowWindowSec}:${w}:${h}:${slowChs.join(',')}:${autoScaleGlobal}:${darkMode}`;
     let slowLabelData;
 
     if (slowKey !== _slowCacheKey) {
@@ -189,13 +197,7 @@ function drawWaveforms() {
       drawGrid(oCtx, w, h, slowChs.length, chHeight, slowWindowSec, gridBase);
 
       const slowData = slowChs.map(n => readChannelData(n, slowStart, slowWindowSec)).filter(Boolean);
-      const groupStdMax = {};
-      slowData.forEach(d => {
-        const g = getYmaxGroup(d.chName);
-        groupStdMax[g] = Math.max(groupStdMax[g] || 0, d.std);
-      });
-
-      _slowLabelCache = drawTraces(oCtx, w, slowData, chHeight, gainFactor, groupStdMax);
+      _slowLabelCache = drawTraces(oCtx, w, slowData, chHeight);
 
       // Time axis
       const timeColor = darkMode ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.25)';

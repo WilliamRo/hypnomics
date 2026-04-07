@@ -49,16 +49,12 @@ function buildWaveformLabels(labelData, chHeights) {
       el.appendChild(nameSpan);
       el.appendChild(infoSpan);
 
-      el.ondblclick = ((idx) => () => {
+      // Right-click context menu for pin/isolate
+      el.oncontextmenu = ((idx) => (e) => {
+        e.preventDefault();
         const live = currentLabelData[idx];
         if (!live) return;
-        if (fixedYmax[live.group] != null) {
-          delete fixedYmax[live.group];
-        } else {
-          fixedYmax[live.group] = live.yHalfRange;
-        }
-        saveCurrentFileState();
-        drawWaveforms();
+        showLabelCtxMenu(e.clientX, e.clientY, live);
       })(i);
 
       container.appendChild(el);
@@ -82,9 +78,12 @@ function buildWaveformLabels(labelData, chHeights) {
     const h = heights[i];
     const yCenter = yTops[i] + h / 2;
     const isFixed = d.isFixed;
+    const isIsolated = d.isIsolated;
     const textColor = isFixed
       ? (darkMode ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.7)')
-      : (darkMode ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.25)');
+      : isIsolated
+        ? (darkMode ? 'rgba(255,200,100,0.5)' : 'rgba(180,120,0,0.4)')
+        : (darkMode ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.25)');
 
     const margin = 8;
     const maxPx = h / 2 - margin;
@@ -108,7 +107,7 @@ function buildWaveformLabels(labelData, chHeights) {
     if (tickPx > 0) {
       const yTop = yCenter - tickPx;
       const yBot = yCenter + tickPx;
-      const label = formatYScale(tickValue);
+      const label = formatYScale(tickValue, d.unit);
 
       tCtx.strokeStyle = tickColor;
       tCtx.beginPath();

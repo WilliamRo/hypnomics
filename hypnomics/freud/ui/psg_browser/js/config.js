@@ -97,13 +97,29 @@ function formatTime(seconds) {
   return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
 }
 
-function formatYScale(val) {
+function formatYScale(val, unit) {
+  // If unit is known and not voltage, show raw value + unit
+  if (unit && unit !== 'uV' && unit !== 'V' && unit !== 'mV') {
+    return val.toFixed(2) + ' ' + unit;
+  }
+  // Default: assume SI Volts, auto-scale
   const abs = Math.abs(val);
   if (abs < 0.001) return (val * 1e6).toFixed(0) + ' nV';
   if (abs < 1) return (val * 1e3).toFixed(0) + ' \u00b5V';
   if (abs < 1000) return val.toFixed(0) + ' \u00b5V';
   if (abs < 1e6) return (val / 1e3).toFixed(1) + ' mV';
   return val.toFixed(0);
+}
+
+function computePercentileYmax(data, mean, percentile) {
+  // Compute the p-th percentile of |data - mean| as the y half-range
+  const n = data.length;
+  if (n === 0) return 1;
+  const absVals = new Float32Array(n);
+  for (let i = 0; i < n; i++) absVals[i] = Math.abs(data[i] - mean);
+  absVals.sort();
+  const idx = Math.min(Math.floor(n * percentile / 100), n - 1);
+  return absVals[idx] || 1;
 }
 
 function niceRound(val) {

@@ -101,6 +101,14 @@ class PSG:
       channel = chs[0]
     return float(self.file['signals'][channel].attrs['sfreq'])
 
+  def unit(self, channel=None):
+    """Get physical unit for a channel (or first channel if None)."""
+    chs = self.channel_names
+    assert len(chs) > 0, 'No channels in this PSG file'
+    if channel is None:
+      channel = chs[0]
+    return self.file['signals'][channel].attrs.get('unit', '')
+
   def read(self, channels=None, tmin=None, tmax=None):
     """Read signal data, optionally cropped by time.
 
@@ -276,8 +284,10 @@ class PSG:
 
     Args:
       path: output file path.
-      signal_dict: {channel_name: (data_1d, sfreq), ...}
+      signal_dict: {channel_name: (data_1d, sfreq[, unit[, edf_unit]]), ...}
         data_1d: np.ndarray of shape [L].
+        unit: canonical physical unit (e.g., 'V' for MNE output).
+        edf_unit: original unit from EDF header (for reference/warning).
       annotations: {key: (intervals, labels, label_names), ...}
         intervals: np.ndarray or list of (start, end) pairs in seconds.
         labels: np.ndarray or list of int, or None for event-only.
@@ -291,7 +301,9 @@ class PSG:
       PSG instance for the created file.
     """
     # Validate signal_dict
-    for ch_name, (data, sfreq) in signal_dict.items():
+    for ch_name, ch_tuple in signal_dict.items():
+      data = ch_tuple[0]
+      sfreq = ch_tuple[1]
       assert isinstance(data, np.ndarray) and data.ndim == 1, (
         f"Channel '{ch_name}': data must be 1-D ndarray, got shape {data.shape}")
       assert sfreq > 0, (
@@ -304,13 +316,20 @@ class PSG:
 
       # Signals
       sig_grp = f.create_group('signals')
-      for ch_name, (data, sfreq) in signal_dict.items():
+      for ch_name, ch_tuple in signal_dict.items():
+        data, sfreq = ch_tuple[0], ch_tuple[1]
+        unit = ch_tuple[2] if len(ch_tuple) > 2 else ''
+        edf_unit = ch_tuple[3] if len(ch_tuple) > 3 else ''
         data_stored = data.astype(dtype)
         chunk_samples = int(chunk_seconds * sfreq)
         chunks = (min(chunk_samples, len(data_stored)),)
         ds = sig_grp.create_dataset(
           ch_name, data=data_stored, chunks=chunks)
         ds.attrs['sfreq'] = float(sfreq)
+        if unit:
+          ds.attrs['unit'] = unit
+        if edf_unit:
+          ds.attrs['edf_unit'] = edf_unit
 
       # Annotations
       if annotations:

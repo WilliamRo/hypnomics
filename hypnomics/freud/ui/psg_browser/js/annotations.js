@@ -75,6 +75,46 @@ function buildAnnoSelect() {
 
   sel.value = activeAnnoKey;
   updateStageModeBtn();
+  syncCustomAnnoSelect();
+}
+
+function syncCustomAnnoSelect() {
+  const wrap = document.getElementById('annoSelectWrap');
+  const dropdown = document.getElementById('annoSelectDropdown');
+  const label = document.getElementById('annoSelectLabel');
+  if (!wrap || !dropdown) return;
+
+  wrap.style.display = psgFile ? '' : 'none';
+  dropdown.innerHTML = '';
+
+  annoKeys.forEach(key => {
+    const opt = document.createElement('div');
+    opt.className = 'custom-select-option' + (key === activeAnnoKey ? ' active' : '');
+    const shortName = key.replace('stage ', '');
+    const isLocal = isLocalAnnotation(key);
+    opt.textContent = shortName + (isLocal ? ' *' : '');
+    opt.onclick = () => {
+      wrap.classList.remove('open');
+      document.getElementById('annoSelect').value = key;
+      document.getElementById('annoSelect').dispatchEvent(new Event('change'));
+    };
+    dropdown.appendChild(opt);
+  });
+
+  // "New" option
+  const newOpt = document.createElement('div');
+  newOpt.className = 'custom-select-option new-anno';
+  newOpt.textContent = '+ New annotation...';
+  newOpt.onclick = () => {
+    wrap.classList.remove('open');
+    document.getElementById('annoSelect').value = '__new__';
+    document.getElementById('annoSelect').dispatchEvent(new Event('change'));
+  };
+  dropdown.appendChild(newOpt);
+
+  // Update trigger label
+  const shortName = activeAnnoKey ? activeAnnoKey.replace('stage ', '') : '—';
+  label.textContent = shortName;
 }
 
 // Check if an annotation is local (not from the h5 file)

@@ -73,7 +73,18 @@ applyTheme(darkMode);
 // --- Annotation selector ---
 document.getElementById('annoSelect').onchange = (e) => {
   switchAnnotation(e.target.value);
+  syncCustomAnnoSelect();
 };
+
+// Custom anno dropdown toggle
+document.getElementById('annoSelectTrigger').onclick = (e) => {
+  e.stopPropagation();
+  document.getElementById('annoSelectWrap').classList.toggle('open');
+};
+document.addEventListener('click', (e) => {
+  const wrap = document.getElementById('annoSelectWrap');
+  if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
+});
 
 // --- Stage mode toggle ---
 document.getElementById('stageModeBtn').onclick = () => toggleStageMode();
@@ -95,27 +106,63 @@ document.getElementById('themeToggle').onclick = () => {
 // --- Fast window selector ---
 const fastSelect = document.getElementById('fastWindowSelect');
 fastSelect.value = fastWindowSec;
-fastSelect.onchange = () => {
-  fastWindowSec = parseInt(fastSelect.value);
+
+function applyFastWindow(val) {
+  fastWindowSec = val;
+  fastSelect.value = val;
+  document.getElementById('fastSelectLabel').textContent =
+    fastSelect.options[fastSelect.selectedIndex]?.textContent || val + 's';
   snapViewStart(viewStartSec);
   saveSettings({ fastWindowSec });
   clearEpochCache();
+  buildChannelToggles();
   drawHypnogram();
   drawWaveforms();
+  updateEpochInfo();
+}
+
+document.getElementById('fastSelectTrigger').onclick = (e) => {
+  e.stopPropagation();
+  document.getElementById('fastSelectWrap').classList.toggle('open');
 };
+document.querySelectorAll('#fastSelectDropdown .custom-select-option').forEach(opt => {
+  opt.onclick = () => {
+    applyFastWindow(parseInt(opt.dataset.val));
+    document.getElementById('fastSelectWrap').classList.remove('open');
+  };
+});
+document.getElementById('fastSelectLabel').textContent =
+  fastSelect.options[fastSelect.selectedIndex]?.textContent || fastWindowSec + 's';
 
 // --- Slow window selector ---
 const slowSelect = document.getElementById('slowWindowSelect');
 slowSelect.value = slowWindowSec;
-slowSelect.onchange = () => {
-  slowWindowSec = parseInt(slowSelect.value);
+
+function applySlowWindow(val) {
+  slowWindowSec = val;
+  slowSelect.value = val;
+  document.getElementById('slowSelectLabel').textContent =
+    slowSelect.options[slowSelect.selectedIndex]?.textContent || val + 's';
   saveSettings({ slowWindowSec });
   clearEpochCache();
   buildChannelToggles();
   drawWaveforms();
-};
+}
 
-// --- Click outside to close panels ---
+document.getElementById('slowSelectTrigger').onclick = (e) => {
+  e.stopPropagation();
+  document.getElementById('slowSelectWrap').classList.toggle('open');
+};
+document.querySelectorAll('#slowSelectDropdown .custom-select-option').forEach(opt => {
+  opt.onclick = () => {
+    applySlowWindow(parseInt(opt.dataset.val));
+    document.getElementById('slowSelectWrap').classList.remove('open');
+  };
+});
+document.getElementById('slowSelectLabel').textContent =
+  slowSelect.options[slowSelect.selectedIndex]?.textContent || slowWindowSec + 's';
+
+// --- Click outside to close panels/custom selects ---
 document.addEventListener('click', (e) => {
   const configPanel = document.getElementById('configPanel');
   const configBtn = document.getElementById('configBtn');
@@ -127,6 +174,10 @@ document.addEventListener('click', (e) => {
   if (helpPanel.classList.contains('active') && !helpPanel.contains(e.target)) {
     helpPanel.classList.remove('active');
   }
+  // Close all custom selects
+  document.querySelectorAll('.custom-select.open').forEach(el => {
+    if (!el.contains(e.target)) el.classList.remove('open');
+  });
 });
 
 // --- File open / drop ---
@@ -347,24 +398,114 @@ document.getElementById('waveformWrap').addEventListener('wheel', (e) => {
     const idx = FAST_WINDOW_OPTIONS.indexOf(fastWindowSec);
     const newIdx = Math.max(0, Math.min(FAST_WINDOW_OPTIONS.length - 1, idx + dir));
     if (FAST_WINDOW_OPTIONS[newIdx] !== fastWindowSec) {
-      fastWindowSec = FAST_WINDOW_OPTIONS[newIdx];
-      fastSelect.value = fastWindowSec;
-      snapViewStart(viewStartSec);
-      saveSettings({ fastWindowSec });
-      clearEpochCache();
-      drawHypnogram();
-      drawWaveforms();
+      applyFastWindow(FAST_WINDOW_OPTIONS[newIdx]);
     }
   } else {
     navigate(e.deltaY > 0 ? 1 : -1);
   }
 }, { passive: false });
 
-// --- Gain slider ---
-gainSlider.oninput = () => {
-  gain = parseInt(gainSlider.value);
-  gainValue.textContent = gain;
-  saveSettings({ gain });
+// --- Auto-scale toggle ---
+const autoScaleCheck = document.getElementById('autoScaleCheck');
+
+function updateAutoScaleBtn() {
+  autoScaleCheck.checked = autoScaleGlobal;
+}
+updateAutoScaleBtn();
+
+// Track active computation so toggling off mid-compute cancels it
+let _scaleCancel = null;
+
+autoScaleCheck.onchange = async () => {
+  // If computing, cancel it
+  if (_scaleCancel) { _scaleCancel(); _scaleCancel = null; }
+
+  autoScaleGlobal = autoScaleCheck.checked;
+  updateAutoScaleBtn();
+
+  if (autoScaleGlobal && Object.keys(globalYmax).length === 0) {
+    // Need to compute — check localStorage first
+    const cacheKey = 'morpheus_globalYmax_' + lastFileName;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      globalYmax = JSON.parse(cached);
+    } else {
+      // Compute on main thread using requestAnimationFrame for responsive UI
+      globalYmax = {};
+      const n = channels.length;
+      let ci = 0;
+      let cancelled = false;
+
+      loading.innerHTML = `
+        <div style="text-align:center">
+          <div id="scaleProgress">Computing scale...</div>
+          <button class="btn" id="scaleCancelBtn" style="margin-top:12px;padding:4px 14px">Cancel</button>
+        </div>`;
+      loading.classList.add('active');
+      const cancelFn = () => { cancelled = true; };
+      document.getElementById('scaleCancelBtn').onclick = cancelFn;
+      _scaleCancel = cancelFn;
+
+      function computeNext() {
+        if (cancelled) {
+          loading.innerHTML = 'Loading PSG file...';
+          loading.classList.remove('active');
+          globalYmax = {};
+          autoScaleGlobal = false;
+          updateAutoScaleBtn();
+          return;
+        }
+        if (ci >= n) {
+          // All done
+          _scaleCancel = null;
+          localStorage.setItem(cacheKey, JSON.stringify(globalYmax));
+          loading.innerHTML = 'Loading PSG file...';
+          loading.classList.remove('active');
+          clearEpochCache();
+          drawWaveforms();
+          return;
+        }
+
+        const ch = channels[ci];
+        const el = document.getElementById('scaleProgress');
+        if (el) el.textContent = `Computing: ${ch.name} (${ci + 1}/${n})`;
+
+        // Schedule actual computation on next frame so progress text renders
+        requestAnimationFrame(() => {
+          if (cancelled) { computeNext(); return; }
+
+          console.time('scale:' + ch.name);
+          const ds = psgFile.get(`signals/${ch.name}`);
+          const data = readDataset(ds);
+
+          // Subsample for speed
+          const step = Math.max(1, Math.floor(data.length / 100000));
+          const nSub = Math.ceil(data.length / step);
+          let sum = 0;
+          for (let i = 0; i < data.length; i += step) sum += data[i];
+          const mean = sum / nSub;
+
+          const absVals = new Float32Array(nSub);
+          let j = 0;
+          for (let i = 0; i < data.length; i += step) absVals[j++] = Math.abs(data[i] - mean);
+          absVals.sort();
+
+          const idx = Math.min(Math.floor(nSub * 0.99), nSub - 1);
+          globalYmax[ch.name] = absVals[idx] || 1;
+          console.timeEnd('scale:' + ch.name);
+
+          ci++;
+          // Use setTimeout(0) to yield back to event loop between channels
+          setTimeout(computeNext, 0);
+        });
+      }
+
+      computeNext();
+      return; // drawWaveforms called in computeNext when done
+    }
+  }
+
+  clearEpochCache();
   drawWaveforms();
 };
 
@@ -456,4 +597,99 @@ document.getElementById('cmdInput').addEventListener('keydown', (e) => {
 // Click overlay to close
 document.getElementById('cmdOverlay').addEventListener('click', (e) => {
   if (e.target === document.getElementById('cmdOverlay')) closeCmdBar();
+});
+
+
+// --- Label context menu ---
+const labelCtxMenu = document.getElementById('labelCtxMenu');
+let labelCtxTarget = null; // current labelData item
+
+function showLabelCtxMenu(x, y, labelItem) {
+  labelCtxTarget = labelItem;
+
+  // Update toggle states
+  const pinEl = document.getElementById('labelCtxPin');
+  const isoEl = document.getElementById('labelCtxIsolate');
+  const pinGroupEl = document.getElementById('labelCtxPinGroup');
+  const unpinGroupEl = document.getElementById('labelCtxUnpinGroup');
+
+  const isPinned = pinnedChannels[labelItem.name] != null;
+  const isIsolated = isolatedChannels[labelItem.name] === true;
+
+  pinEl.classList.toggle('checked', isPinned);
+  pinEl.querySelector('.ctx-check').innerHTML = isPinned ? '&#x2611;' : '&#x2610;';
+
+  isoEl.classList.toggle('checked', isIsolated);
+  isoEl.querySelector('.ctx-check').innerHTML = isIsolated ? '&#x2611;' : '&#x2610;';
+
+  // Hide group actions for isolated channels
+  pinGroupEl.style.display = isIsolated ? 'none' : '';
+  unpinGroupEl.style.display = isIsolated ? 'none' : '';
+
+  labelCtxMenu.style.left = x + 'px';
+  labelCtxMenu.style.top = y + 'px';
+  labelCtxMenu.classList.add('active');
+}
+
+// Pin scale toggle
+document.getElementById('labelCtxPin').onclick = () => {
+  if (!labelCtxTarget) return;
+  const name = labelCtxTarget.name;
+  if (pinnedChannels[name] != null) {
+    delete pinnedChannels[name];
+  } else {
+    pinnedChannels[name] = labelCtxTarget.yHalfRange;
+  }
+  labelCtxMenu.classList.remove('active');
+  saveCurrentFileState();
+  drawWaveforms();
+};
+
+// Isolate toggle
+document.getElementById('labelCtxIsolate').onclick = () => {
+  if (!labelCtxTarget) return;
+  const name = labelCtxTarget.name;
+  if (isolatedChannels[name]) {
+    delete isolatedChannels[name];
+  } else {
+    isolatedChannels[name] = true;
+  }
+  labelCtxMenu.classList.remove('active');
+  saveCurrentFileState();
+  drawWaveforms();
+};
+
+// Pin group: pin all non-isolated channels in this group to the same ymax
+document.getElementById('labelCtxPinGroup').onclick = () => {
+  if (!labelCtxTarget) return;
+  const group = labelCtxTarget.group;
+  const ymax = labelCtxTarget.yHalfRange;
+  // Pin every non-isolated channel in this group (overwrites existing pins)
+  currentLabelData.forEach(d => {
+    if (d.group === group && !isolatedChannels[d.name]) {
+      pinnedChannels[d.name] = ymax;
+    }
+  });
+  labelCtxMenu.classList.remove('active');
+  saveCurrentFileState();
+  drawWaveforms();
+};
+
+// Unpin group: unpin all non-isolated channels in this group
+document.getElementById('labelCtxUnpinGroup').onclick = () => {
+  if (!labelCtxTarget) return;
+  const group = labelCtxTarget.group;
+  currentLabelData.forEach(d => {
+    if (d.group === group && !isolatedChannels[d.name]) {
+      delete pinnedChannels[d.name];
+    }
+  });
+  labelCtxMenu.classList.remove('active');
+  saveCurrentFileState();
+  drawWaveforms();
+};
+
+// Close label context menu on click outside
+document.addEventListener('click', (e) => {
+  if (!labelCtxMenu.contains(e.target)) labelCtxMenu.classList.remove('active');
 });

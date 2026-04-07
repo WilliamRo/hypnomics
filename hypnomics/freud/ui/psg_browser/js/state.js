@@ -119,6 +119,7 @@ function saveCurrentFileState() {
   _saveTimer = setTimeout(() => {
     saveFileSettings(lastFileName, {
       markIn, markOut, epoch: currentEpoch, fixedYmax: { ...fixedYmax },
+      pinnedChannels: { ...pinnedChannels }, isolatedChannels: { ...isolatedChannels },
     });
   }, 500);
 }
@@ -132,7 +133,9 @@ let currentEpoch = 0;
 let viewStartSec = 0; // precise start time for fast view
 let totalEpochs = 0;
 const savedSettings = loadSettings();
-let gain = savedSettings.gain ?? 20;
+let gain = 20; // kept for backward compat in drawTraces
+let autoScaleGlobal = false; // default OFF
+let globalYmax = {}; // { chName: p99_value } — cached per file
 let duration = 0;
 
 // Mark In/Out
@@ -142,6 +145,10 @@ let ctxMenuEpoch = 0; // epoch at right-click position
 
 // Fixed ymax per group: { groupName: value } or null for std-based
 let fixedYmax = {};  // e.g., { EEG_EOG: 75.0 }
+
+// Per-channel pin/isolate state
+let pinnedChannels = {};   // { chName: ymaxValue }
+let isolatedChannels = {}; // { chName: true }
 
 // Data cache: avoids re-reading HDF5 on every redraw
 const epochCache = {}; // { "chName:epoch": { data, mean, std } }
@@ -193,8 +200,6 @@ const waveformDivider = document.getElementById('waveformDivider');
 const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
 const epochInfo = document.getElementById('epochInfo');
-const gainSlider = document.getElementById('gainSlider');
-const gainValue = document.getElementById('gainValue');
 // channelToggles removed — now using channel panel
 const hypnoTime = document.getElementById('hypnoTime');
 
@@ -291,9 +296,8 @@ function resizeCanvases() {
   slowCanvas.height = slowCanvas.clientHeight || 0;
 }
 
-// Restore saved gain to slider
-gainSlider.value = gain;
-gainValue.textContent = gain;
+// DOM refs for auto-scale (gain slider removed)
+const autoScaleBtn = document.getElementById('autoScaleBtn');
 
 // Navigation helpers
 function visibleStart() { return markIn ?? 0; }

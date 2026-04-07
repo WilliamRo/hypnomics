@@ -48,7 +48,9 @@ async function loadFile(arrayBuffer, opts = {}) {
     for (const name of chNames) {
       const ds = psgFile.get(`signals/${name}`);
       const sfreq = ds.attrs['sfreq'].value;
-      channels.push({ name, sfreq, length: ds.shape[0] });
+      const unit = ds.attrs['unit']?.value || '';
+      const edf_unit = ds.attrs['edf_unit']?.value || '';
+      channels.push({ name, sfreq, length: ds.shape[0], unit, edf_unit });
     }
 
     // (4.2) Restore saved channels or default to highest sfreq
@@ -118,12 +120,23 @@ async function loadFile(arrayBuffer, opts = {}) {
       markIn = opts.markIn ?? null;
       markOut = opts.markOut ?? null;
       fixedYmax = opts.fixedYmax ? { ...opts.fixedYmax } : {};
+      pinnedChannels = opts.pinnedChannels ? { ...opts.pinnedChannels } : {};
+      isolatedChannels = opts.isolatedChannels ? { ...opts.isolatedChannels } : {};
+      // Restore global ymax cache if available
+      const cacheKey = 'morpheus_globalYmax_' + lastFileName;
+      const cached = localStorage.getItem(cacheKey);
+      globalYmax = cached ? JSON.parse(cached) : {};
       currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), opts.epoch ?? 0));
       viewStartSec = currentEpoch * 30;
     } else {
       markIn = null;
       markOut = null;
       fixedYmax = {};
+      pinnedChannels = {};
+      isolatedChannels = {};
+      globalYmax = {};
+      autoScaleGlobal = false;
+      updateAutoScaleBtn();
       if (annotations) {
         const firstAnnoTime = annotations.intervals[0];
         currentEpoch = Math.floor(firstAnnoTime / 30);

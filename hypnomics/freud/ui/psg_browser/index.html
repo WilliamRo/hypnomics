@@ -18,7 +18,14 @@
   </div>
   <div style="display:flex;align-items:center;gap:8px">
     <button class="btn" id="stageModeBtn" style="display:none;padding:4px 10px;font-size:11px;font-family:'JetBrains Mono',monospace" title="Toggle stage annotation mode">✏ Stage</button>
-    <select id="annoSelect" class="btn" style="display:none;font-family:'JetBrains Mono',monospace;font-size:11px;padding:4px 8px;max-width:200px"></select>
+    <div class="custom-select" id="annoSelectWrap" style="display:none">
+      <div class="custom-select-trigger" id="annoSelectTrigger">
+        <span id="annoSelectLabel">—</span>
+        <span class="custom-select-arrow">▾</span>
+      </div>
+      <div class="custom-select-dropdown" id="annoSelectDropdown"></div>
+    </div>
+    <select id="annoSelect" style="position:absolute;visibility:hidden;pointer-events:none;width:0;height:0"></select>
     <button class="btn" id="openBtn">Open .psg.h5</button>
     <input type="file" id="fileInput" accept=".h5,.hdf5,.psg.h5">
     <button class="btn" id="configBtn" title="Settings" style="padding:6px 10px;font-size:16px">⚙</button>
@@ -79,9 +86,11 @@
       <button class="nav-btn" id="nextBtn">&rarr;</button>
     </div>
     <div class="gain-group">
-      <span>Gain</span>
-      <input type="range" id="gainSlider" min="1" max="100" value="20">
-      <span id="gainValue">20</span>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim)">Global Auto-scale</span>
+      <label class="toggle-switch" id="autoScaleBtn">
+        <input type="checkbox" id="autoScaleCheck">
+        <span class="toggle-slider"></span>
+      </label>
     </div>
   </div>
 </div>
@@ -94,6 +103,60 @@
     <button class="side-panel-close" onclick="document.getElementById('channelPanel').classList.remove('active')">&times;</button>
   </div>
   <div class="channel-panel-body" id="channelPanelBody"></div>
+  <div class="channel-panel-controls">
+    <div class="ch-ctrl-title">Window size</div>
+    <div class="ch-ctrl-row">
+      <label>Fast</label>
+      <div class="custom-select custom-select-sm custom-select-up" id="fastSelectWrap">
+        <div class="custom-select-trigger" id="fastSelectTrigger">
+          <span id="fastSelectLabel">30s</span>
+          <span class="custom-select-arrow">▴</span>
+        </div>
+        <div class="custom-select-dropdown" id="fastSelectDropdown">
+          <div class="custom-select-option" data-val="5">5s</div>
+          <div class="custom-select-option" data-val="10">10s</div>
+          <div class="custom-select-option" data-val="15">15s</div>
+          <div class="custom-select-option" data-val="30">30s</div>
+        </div>
+      </div>
+      <select id="fastWindowSelect" style="position:absolute;visibility:hidden;width:0;height:0">
+        <option value="5">5s</option><option value="10">10s</option>
+        <option value="15">15s</option><option value="30">30s</option>
+      </select>
+    </div>
+    <div class="ch-ctrl-row">
+      <label>Slow</label>
+      <div class="custom-select custom-select-sm custom-select-up" id="slowSelectWrap">
+        <div class="custom-select-trigger" id="slowSelectTrigger">
+          <span id="slowSelectLabel">5 min</span>
+          <span class="custom-select-arrow">▴</span>
+        </div>
+        <div class="custom-select-dropdown" id="slowSelectDropdown">
+          <div class="custom-select-option" data-val="60">1 min</div>
+          <div class="custom-select-option" data-val="120">2 min</div>
+          <div class="custom-select-option" data-val="300">5 min</div>
+          <div class="custom-select-option" data-val="600">10 min</div>
+        </div>
+      </div>
+      <select id="slowWindowSelect" style="position:absolute;visibility:hidden;width:0;height:0">
+        <option value="60">1 min</option><option value="120">2 min</option>
+        <option value="300">5 min</option><option value="600">10 min</option>
+      </select>
+    </div>
+  </div>
+</div>
+
+<!-- Label context menu (right-click on channel label) -->
+<div class="ctx-menu" id="labelCtxMenu">
+  <div class="ctx-menu-item ctx-menu-toggle" id="labelCtxPin">
+    <span class="ctx-check">&#x2610;</span> Pin scale
+  </div>
+  <div class="ctx-menu-item ctx-menu-toggle" id="labelCtxIsolate">
+    <span class="ctx-check">&#x2610;</span> Isolate
+  </div>
+  <div class="ctx-menu-sep"></div>
+  <div class="ctx-menu-item" id="labelCtxPinGroup">Pin group</div>
+  <div class="ctx-menu-item" id="labelCtxUnpinGroup">Unpin group</div>
 </div>
 
 <!-- Loading overlay -->
@@ -111,24 +174,6 @@
   <div class="config-section" style="display:flex;align-items:center;justify-content:space-between">
     <label style="margin:0" id="themeModeLabel">Dark Mode</label>
     <button class="btn" id="themeToggle" style="padding:4px 10px;font-size:14px"></button>
-  </div>
-  <div class="config-section" style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
-    <label style="margin:0">Fast Window</label>
-    <select id="fastWindowSelect" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-family:'JetBrains Mono',monospace;font-size:11px">
-      <option value="5">5s</option>
-      <option value="10">10s</option>
-      <option value="15">15s</option>
-      <option value="30">30s</option>
-    </select>
-  </div>
-  <div class="config-section" style="display:flex;align-items:center;justify-content:space-between;margin-top:8px">
-    <label style="margin:0">Slow Window</label>
-    <select id="slowWindowSelect" style="background:var(--bg-surface);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-family:'JetBrains Mono',monospace;font-size:11px">
-      <option value="60">1 min</option>
-      <option value="120">2 min</option>
-      <option value="300">5 min</option>
-      <option value="600">10 min</option>
-    </select>
   </div>
 </div>
 
