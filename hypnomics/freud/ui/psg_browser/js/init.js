@@ -18,6 +18,9 @@ async function restoreLastSession(fileName) {
     markOut: fs.markOut,
     epoch: fs.epoch,
     fixedYmax: fs.fixedYmax,
+    pinnedChannels: fs.pinnedChannels,
+    isolatedChannels: fs.isolatedChannels,
+    autoScaleGlobal: fs.autoScaleGlobal,
   });
 }
 
@@ -122,10 +125,12 @@ async function loadFile(arrayBuffer, opts = {}) {
       fixedYmax = opts.fixedYmax ? { ...opts.fixedYmax } : {};
       pinnedChannels = opts.pinnedChannels ? { ...opts.pinnedChannels } : {};
       isolatedChannels = opts.isolatedChannels ? { ...opts.isolatedChannels } : {};
-      // Restore global ymax cache if available
+      // Restore global ymax cache and auto-scale state
       const cacheKey = 'morpheus_globalYmax_' + lastFileName;
       const cached = localStorage.getItem(cacheKey);
       globalYmax = cached ? JSON.parse(cached) : {};
+      autoScaleGlobal = Object.keys(globalYmax).length > 0 && (opts.autoScaleGlobal ?? false);
+      updateAutoScaleBtn();
       currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), opts.epoch ?? 0));
       viewStartSec = currentEpoch * 30;
     } else {

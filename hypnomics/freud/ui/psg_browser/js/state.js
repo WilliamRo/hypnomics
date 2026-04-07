@@ -120,6 +120,7 @@ function saveCurrentFileState() {
     saveFileSettings(lastFileName, {
       markIn, markOut, epoch: currentEpoch, fixedYmax: { ...fixedYmax },
       pinnedChannels: { ...pinnedChannels }, isolatedChannels: { ...isolatedChannels },
+      autoScaleGlobal,
     });
   }, 500);
 }

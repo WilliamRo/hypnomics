@@ -638,6 +638,7 @@ document.getElementById('labelCtxPinCheck').onchange = (e) => {
   } else {
     delete pinnedChannels[name];
   }
+  prevLabelKey = ''; _slowCacheKey = ''; // force full rebuild
   saveCurrentFileState();
   drawWaveforms();
 };
@@ -662,6 +663,7 @@ document.getElementById('labelCtxIsolateCheck').onchange = (e) => {
   // Update group button visibility
   document.getElementById('labelCtxPinGroup').style.display = e.target.checked ? 'none' : '';
   document.getElementById('labelCtxUnpinGroup').style.display = e.target.checked ? 'none' : '';
+  prevLabelKey = ''; _slowCacheKey = ''; // force full rebuild
   saveCurrentFileState();
   drawWaveforms();
 };
@@ -684,6 +686,7 @@ document.getElementById('labelCtxPinGroup').onclick = () => {
     }
   });
   labelCtxMenu.classList.remove('active');
+  prevLabelKey = ''; _slowCacheKey = '';
   saveCurrentFileState();
   drawWaveforms();
 };
@@ -698,6 +701,7 @@ document.getElementById('labelCtxUnpinGroup').onclick = () => {
     }
   });
   labelCtxMenu.classList.remove('active');
+  prevLabelKey = ''; _slowCacheKey = '';
   saveCurrentFileState();
   drawWaveforms();
 };
