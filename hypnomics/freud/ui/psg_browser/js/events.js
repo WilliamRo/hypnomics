@@ -607,56 +607,69 @@ let labelCtxTarget = null; // current labelData item
 function showLabelCtxMenu(x, y, labelItem) {
   labelCtxTarget = labelItem;
 
-  // Update toggle states
-  const pinEl = document.getElementById('labelCtxPin');
-  const isoEl = document.getElementById('labelCtxIsolate');
-  const pinGroupEl = document.getElementById('labelCtxPinGroup');
-  const unpinGroupEl = document.getElementById('labelCtxUnpinGroup');
-
   const isPinned = pinnedChannels[labelItem.name] != null;
   const isIsolated = isolatedChannels[labelItem.name] === true;
 
-  pinEl.classList.toggle('checked', isPinned);
-  pinEl.querySelector('.ctx-check').innerHTML = isPinned ? '&#x2611;' : '&#x2610;';
-
-  isoEl.classList.toggle('checked', isIsolated);
-  isoEl.querySelector('.ctx-check').innerHTML = isIsolated ? '&#x2611;' : '&#x2610;';
+  // Update toggle switches
+  document.getElementById('labelCtxPinCheck').checked = isPinned;
+  document.getElementById('labelCtxIsolateCheck').checked = isIsolated;
 
   // Hide group actions for isolated channels
-  pinGroupEl.style.display = isIsolated ? 'none' : '';
-  unpinGroupEl.style.display = isIsolated ? 'none' : '';
+  document.getElementById('labelCtxPinGroup').style.display = isIsolated ? 'none' : '';
+  document.getElementById('labelCtxUnpinGroup').style.display = isIsolated ? 'none' : '';
+
+  // Position: open upward if near bottom of viewport
+  labelCtxMenu.classList.add('active');
+  const menuH = labelCtxMenu.offsetHeight;
+  const viewH = window.innerHeight;
+  const openUp = y + menuH > viewH - 20;
 
   labelCtxMenu.style.left = x + 'px';
-  labelCtxMenu.style.top = y + 'px';
-  labelCtxMenu.classList.add('active');
+  labelCtxMenu.style.top = openUp ? (y - menuH) + 'px' : y + 'px';
 }
 
-// Pin scale toggle
-document.getElementById('labelCtxPin').onclick = () => {
+// Pin scale toggle (via checkbox inside toggle switch)
+document.getElementById('labelCtxPinCheck').onchange = (e) => {
+  e.stopPropagation();
   if (!labelCtxTarget) return;
   const name = labelCtxTarget.name;
-  if (pinnedChannels[name] != null) {
-    delete pinnedChannels[name];
-  } else {
+  if (e.target.checked) {
     pinnedChannels[name] = labelCtxTarget.yHalfRange;
+  } else {
+    delete pinnedChannels[name];
   }
-  labelCtxMenu.classList.remove('active');
   saveCurrentFileState();
   drawWaveforms();
 };
+// Also toggle when clicking the row (not just the switch)
+document.getElementById('labelCtxPin').onclick = (e) => {
+  if (e.target.closest('.toggle-switch')) return; // let checkbox handle it
+  const cb = document.getElementById('labelCtxPinCheck');
+  cb.checked = !cb.checked;
+  cb.dispatchEvent(new Event('change'));
+};
 
 // Isolate toggle
-document.getElementById('labelCtxIsolate').onclick = () => {
+document.getElementById('labelCtxIsolateCheck').onchange = (e) => {
+  e.stopPropagation();
   if (!labelCtxTarget) return;
   const name = labelCtxTarget.name;
-  if (isolatedChannels[name]) {
-    delete isolatedChannels[name];
-  } else {
+  if (e.target.checked) {
     isolatedChannels[name] = true;
+  } else {
+    delete isolatedChannels[name];
   }
-  labelCtxMenu.classList.remove('active');
+  // Update group button visibility
+  document.getElementById('labelCtxPinGroup').style.display = e.target.checked ? 'none' : '';
+  document.getElementById('labelCtxUnpinGroup').style.display = e.target.checked ? 'none' : '';
   saveCurrentFileState();
   drawWaveforms();
+};
+document.getElementById('labelCtxIsolate').onclick = (e) => {
+  if (e.target.closest('.toggle-switch')) return;
+  const cb = document.getElementById('labelCtxIsolateCheck');
+  cb.checked = !cb.checked;
+  cb.dispatchEvent(new Event('change'));
 };
 
 // Pin group: pin all non-isolated channels in this group to the same ymax

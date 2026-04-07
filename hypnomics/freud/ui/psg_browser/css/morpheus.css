@@ -102,16 +102,16 @@ body {
 .ctx-menu {
   display: none; position: fixed; background: var(--bg-panel); border: 1px solid var(--border);
   border-radius: 6px; padding: 4px 0; z-index: 300; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-  font-family: 'JetBrains Mono', monospace; font-size: 12px; min-width: 160px;
+  font-family: 'JetBrains Mono', monospace; font-size: 11px; min-width: 140px;
+  user-select: none;
 }
 .ctx-menu.active { display: block; }
-.ctx-menu-item { padding: 6px 14px; color: var(--text); cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+.ctx-menu-item { padding: 5px 10px; color: var(--text); cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .ctx-menu-item:hover { background: var(--bg-surface); }
 .ctx-menu-item .shortcut { color: var(--text-dim); font-size: 10px; }
-.ctx-menu-sep { height: 1px; background: var(--border); margin: 4px 0; }
-.ctx-menu-toggle { gap: 6px; }
-.ctx-check { font-size: 14px; opacity: 0.5; }
-.ctx-menu-toggle.checked .ctx-check { opacity: 1; color: var(--accent); }
+.ctx-menu-sep { height: 1px; background: var(--border); margin: 3px 0; }
+.ctx-menu-toggle { justify-content: space-between; }
+.ctx-menu-toggle .toggle-switch { transform: scale(0.8); }
 
 /* Channel panel controls */
 .channel-panel-controls {
