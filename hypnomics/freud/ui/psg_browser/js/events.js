@@ -92,6 +92,47 @@ document.getElementById('stageModeCheck').onchange = (e) => {
   e.target.checked = stageMode; // sync with actual state
 };
 
+// --- AASM Filter popover ---
+document.getElementById('aasmFilterLabel').onclick = (e) => {
+  e.stopPropagation();
+  document.getElementById('aasmPopover').classList.toggle('open');
+};
+document.addEventListener('click', (e) => {
+  const pop = document.getElementById('aasmPopover');
+  if (pop.classList.contains('open') && !pop.contains(e.target)) pop.classList.remove('open');
+});
+
+// --- Help panel helpers ---
+function updateHelpPanelInfo() {
+  let used = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    used += k.length + localStorage.getItem(k).length;
+  }
+  const total = 5 * 1024 * 1024;
+  document.getElementById('helpStorage').textContent =
+    `localStorage: ${(used / 1024).toFixed(1)} KB / ${(total / 1024 / 1024).toFixed(0)} MB`;
+  const memEl = document.getElementById('helpMemory');
+  if (memEl) {
+    const mb = (filterMemoryBytes / 1048576).toFixed(1);
+    memEl.textContent = filterMemoryBytes > 0
+      ? `Session: ${mb} MB (AASM filter${filterEnabled ? '' : ', cached'})`
+      : 'Session: 0 MB';
+  }
+}
+
+function toggleHelpPanel() {
+  const panel = document.getElementById('helpPanel');
+  panel.classList.toggle('active');
+  if (panel.classList.contains('active')) updateHelpPanelInfo();
+}
+
+// --- Help button (?) in controls bar ---
+document.getElementById('ctrlHelpBtn').onclick = (e) => {
+  e.stopPropagation();
+  toggleHelpPanel();
+};
+
 // --- Config button toggle ---
 document.getElementById('configBtn').onclick = () => {
   document.getElementById('configPanel').classList.toggle('active');
@@ -355,26 +396,7 @@ document.onkeydown = (e) => {
   if (e.key === 'ArrowRight') navigate(1);
   if (e.key === 'ArrowUp') navigate(-10);
   if (e.key === 'ArrowDown') navigate(10);
-  if (e.key === '?') {
-    const panel = document.getElementById('helpPanel');
-    panel.classList.toggle('active');
-    if (panel.classList.contains('active')) {
-      let used = 0;
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        used += k.length + localStorage.getItem(k).length;
-      }
-      const total = 5 * 1024 * 1024; // 5 MB typical limit
-      document.getElementById('helpStorage').textContent =
-        `localStorage: ${(used / 1024).toFixed(1)} KB / ${(total / 1024 / 1024).toFixed(0)} MB`;
-      const memEl = document.getElementById('helpMemory');
-      if (memEl) {
-        memEl.textContent = filterEnabled
-          ? `Session: ${(filterMemoryBytes / 1048576).toFixed(1)} MB (AASM filter)`
-          : 'Session: 0 MB';
-      }
-    }
-  }
+  if (e.key === '?') toggleHelpPanel();
 };
 
 // --- Hypnogram click/drag ---

@@ -91,7 +91,20 @@
       <button class="nav-btn" id="nextBtn">&rarr;</button>
     </div>
     <div class="gain-group">
-      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim)">AASM Filter</span>
+      <span class="ctrl-label clickable" id="aasmFilterLabel">AASM Filter</span>
+      <div class="popover" id="aasmPopover">
+        <div class="popover-title">AASMv3 - III.A.4 Filter Settings</div>
+        <table class="popover-table">
+          <tr><th>Signal</th><th>Low</th><th>High</th></tr>
+          <tr><td>EEG</td><td>0.3 Hz</td><td>35 Hz</td></tr>
+          <tr><td>EOG</td><td>0.3 Hz</td><td>35 Hz</td></tr>
+          <tr><td>EMG</td><td>10 Hz</td><td>100 Hz</td></tr>
+          <tr><td>ECG</td><td>0.3 Hz</td><td>100 Hz</td></tr>
+          <tr><td>Airflow</td><td>0.1 Hz</td><td>15 Hz</td></tr>
+          <tr><td>Nasal pressure</td><td>≤0.03 Hz</td><td>100 Hz</td></tr>
+          <tr><td>Snoring</td><td>10 Hz</td><td>100 Hz</td></tr>
+        </table>
+      </div>
       <label class="toggle-switch">
         <input type="checkbox" id="filterCheck">
         <span class="toggle-slider"></span>
@@ -101,6 +114,7 @@
         <input type="checkbox" id="autoScaleCheck">
         <span class="toggle-slider"></span>
       </label>
+      <span class="ctrl-label clickable ctrl-help" id="ctrlHelpBtn">?</span>
     </div>
   </div>
 </div>
