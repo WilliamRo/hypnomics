@@ -20,7 +20,7 @@
     <select id="annoSelect" style="position:absolute;visibility:hidden;pointer-events:none;width:0;height:0"></select>
     <button class="btn" id="openBtn">Open .psg.h5</button>
     <input type="file" id="fileInput" accept=".h5,.hdf5,.psg.h5">
-    <button class="btn" id="configBtn" title="Settings" style="padding:6px 10px;font-size:16px">⚙</button>
+    <button class="btn" id="configBtn" title="Settings" style="padding:3px 8px;font-size:13px">⚙</button>
   </div>
 </div>
 
@@ -39,17 +39,20 @@
   <div class="hypnogram-container" id="hypnogramContainer">
     <div class="hypnogram-label">
       <span>HYPNOGRAM</span>
-      <div style="display:flex;align-items:center;gap:6px">
-        <div class="custom-select custom-select-sm" id="annoSelectWrap" style="display:none">
-          <div class="custom-select-trigger" id="annoSelectTrigger">
-            <span id="annoSelectLabel">—</span>
-            <span class="custom-select-arrow">▾</span>
-          </div>
-          <div class="custom-select-dropdown" id="annoSelectDropdown"></div>
+      <span class="hypno-label-sep" id="annoLabelSep" style="display:none">|</span>
+      <span class="hypno-label-dim" id="annoLabelText" style="display:none">Label:</span>
+      <div class="custom-select custom-select-hypno" id="annoSelectWrap" style="display:none">
+        <div class="custom-select-trigger" id="annoSelectTrigger">
+          <span id="annoSelectLabel">—</span>
+          <span class="custom-select-arrow">▾</span>
         </div>
-        <button class="btn" id="stageModeBtn" style="display:none;padding:2px 8px;font-size:10px;font-family:'JetBrains Mono',monospace" title="Toggle stage annotation mode">✏ Stage</button>
-        <span id="hypnoTime"></span>
+        <div class="custom-select-dropdown" id="annoSelectDropdown"></div>
       </div>
+      <span class="hypno-label-dim" id="stageModeLabel" style="display:none">Stage</span>
+      <label class="toggle-switch" id="stageModeBtn" style="display:none" title="Toggle stage annotation mode">
+        <input type="checkbox" id="stageModeCheck">
+        <span class="toggle-slider"></span>
+      </label>
     </div>
     <div class="hypnogram-body">
       <div class="hypnogram-yaxis" id="hypnoYAxis">

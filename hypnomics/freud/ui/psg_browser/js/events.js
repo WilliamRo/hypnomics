@@ -64,7 +64,7 @@ function updateEpochInfo() {
     }
   }
   epochInfo.innerHTML = `Epoch <span>${currentEpoch + 1}</span> / ${totalEpochs} | ${formatTime(viewStartSec)} [${fastWindowSec}s]${stageStr}`;
-  hypnoTime.textContent = formatTime(viewStartSec) + ' - ' + formatTime(viewStartSec + fastWindowSec);
+  if (hypnoTime) hypnoTime.textContent = formatTime(viewStartSec) + ' - ' + formatTime(viewStartSec + fastWindowSec);
 }
 
 // --- Apply theme on load ---
@@ -87,7 +87,10 @@ document.addEventListener('click', (e) => {
 });
 
 // --- Stage mode toggle ---
-document.getElementById('stageModeBtn').onclick = () => toggleStageMode();
+document.getElementById('stageModeCheck').onchange = (e) => {
+  toggleStageMode();
+  e.target.checked = stageMode; // sync with actual state
+};
 
 // --- Config button toggle ---
 document.getElementById('configBtn').onclick = () => {

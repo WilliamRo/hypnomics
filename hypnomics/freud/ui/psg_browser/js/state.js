@@ -223,7 +223,7 @@ const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
 const epochInfo = document.getElementById('epochInfo');
 // channelToggles removed — now using channel panel
-const hypnoTime = document.getElementById('hypnoTime');
+const hypnoTime = document.getElementById('hypnoTime'); // may be null (removed)
 
 // (2.1) Color themes
 const THEMES = {

@@ -22,14 +22,17 @@ function isStageEditable() {
 
 function updateStageModeBtn() {
   const btn = document.getElementById('stageModeBtn');
+  const label = document.getElementById('stageModeLabel');
+  const check = document.getElementById('stageModeCheck');
   if (!psgFile || !isStageEditable()) {
     btn.style.display = 'none';
+    label.style.display = 'none';
     stageMode = false;
     return;
   }
   btn.style.display = '';
-  btn.classList.toggle('active', stageMode);
-  btn.textContent = stageMode ? '✏ Staging...' : '✏ Stage';
+  label.style.display = '';
+  check.checked = stageMode;
 }
 
 function toggleStageMode() {
@@ -84,7 +87,12 @@ function syncCustomAnnoSelect() {
   const label = document.getElementById('annoSelectLabel');
   if (!wrap || !dropdown) return;
 
-  wrap.style.display = psgFile ? '' : 'none';
+  const show = !!psgFile;
+  wrap.style.display = show ? '' : 'none';
+  const sep = document.getElementById('annoLabelSep');
+  const lbl = document.getElementById('annoLabelText');
+  if (sep) sep.style.display = show ? '' : 'none';
+  if (lbl) lbl.style.display = show ? '' : 'none';
   dropdown.innerHTML = '';
 
   annoKeys.forEach(key => {
