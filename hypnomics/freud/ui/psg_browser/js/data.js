@@ -84,11 +84,17 @@ function readChannelData(chName, tStart, tDuration) {
   const endSample = Math.min(startSample + numSamples, ch.length);
   if (startSample >= ch.length) return null;
 
-  const cacheKey = `${chName}:${tStart}:${tDuration}`;
+  const cacheKey = `${chName}:${tStart}:${tDuration}:${filterEnabled ? 'F' : 'R'}`;
   let cached = epochCache[cacheKey];
   if (!cached) {
-    const ds = psgFile.get(`signals/${chName}`);
-    const data = readDataset(ds, [[startSample, endSample]]);
+    let data;
+    if (filterEnabled && filteredData[chName]) {
+      // Zero-copy slice from precomputed filtered array
+      data = filteredData[chName].subarray(startSample, endSample);
+    } else {
+      const ds = psgFile.get(`signals/${chName}`);
+      data = readDataset(ds, [[startSample, endSample]]);
+    }
     let sum = 0, sum2 = 0;
     for (let i = 0; i < data.length; i++) { sum += data[i]; sum2 += data[i] * data[i]; }
     const mean = sum / data.length;

@@ -131,6 +131,9 @@ async function loadFile(arrayBuffer, opts = {}) {
       globalYmax = cached ? JSON.parse(cached) : {};
       autoScaleGlobal = Object.keys(globalYmax).length > 0 && (opts.autoScaleGlobal ?? false);
       updateAutoScaleBtn();
+      filterEnabled = false;
+      clearFilteredData();
+      updateFilterBtn();
       currentEpoch = Math.max(visibleStart(), Math.min(visibleEnd(), opts.epoch ?? 0));
       viewStartSec = currentEpoch * 30;
     } else {
@@ -142,6 +145,9 @@ async function loadFile(arrayBuffer, opts = {}) {
       globalYmax = {};
       autoScaleGlobal = false;
       updateAutoScaleBtn();
+      filterEnabled = false;
+      clearFilteredData();
+      updateFilterBtn();
       if (annotations) {
         const firstAnnoTime = annotations.intervals[0];
         currentEpoch = Math.floor(firstAnnoTime / 30);

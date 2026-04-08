@@ -364,6 +364,12 @@ document.onkeydown = (e) => {
       const total = 5 * 1024 * 1024; // 5 MB typical limit
       document.getElementById('helpStorage').textContent =
         `localStorage: ${(used / 1024).toFixed(1)} KB / ${(total / 1024 / 1024).toFixed(0)} MB`;
+      const memEl = document.getElementById('helpMemory');
+      if (memEl) {
+        memEl.textContent = filterEnabled
+          ? `Session: ${(filterMemoryBytes / 1048576).toFixed(1)} MB (AASM filter)`
+          : 'Session: 0 MB';
+      }
     }
   }
 };
@@ -506,6 +512,128 @@ autoScaleCheck.onchange = async () => {
   }
 
   clearEpochCache();
+  drawWaveforms();
+};
+
+// --- AASM Filter toggle ---
+const filterCheck = document.getElementById('filterCheck');
+
+function updateFilterBtn() { filterCheck.checked = filterEnabled; }
+updateFilterBtn();
+
+let _filterCancel = null;
+
+filterCheck.onchange = () => {
+  if (_filterCancel) { _filterCancel(); _filterCancel = null; }
+
+  filterEnabled = filterCheck.checked;
+  updateFilterBtn();
+
+  if (filterEnabled && Object.keys(filteredData).length === 0) {
+    // (1) Compute filtered data for all filterable channels
+    const filterableChannels = channels.filter(ch =>
+      AASM_FILTER_BANDS[getSignalType(ch.name).type] != null);
+
+    if (filterableChannels.length === 0) {
+      filterEnabled = false;
+      updateFilterBtn();
+      return;
+    }
+
+    let ci = 0, cancelled = false;
+    filterMemoryBytes = 0;
+
+    loading.innerHTML = `
+      <div style="text-align:center">
+        <div id="filterProgress">Applying AASM filters...</div>
+        <button class="btn" id="filterCancelBtn" style="margin-top:12px;padding:4px 14px">Cancel</button>
+      </div>`;
+    loading.classList.add('active');
+    const cancelFn = () => { cancelled = true; };
+    document.getElementById('filterCancelBtn').onclick = cancelFn;
+    _filterCancel = cancelFn;
+
+    function filterNext() {
+      if (cancelled) {
+        loading.innerHTML = 'Loading PSG file...';
+        loading.classList.remove('active');
+        clearFilteredData();
+        filterEnabled = false;
+        updateFilterBtn();
+        _filterCancel = null;
+        return;
+      }
+      if (ci >= filterableChannels.length) {
+        // (2) Done — update auto-scale if ON
+        _filterCancel = null;
+        loading.innerHTML = 'Loading PSG file...';
+        loading.classList.remove('active');
+        clearEpochCache();
+        if (autoScaleGlobal) {
+          // Update globalYmax from filtered data
+          for (const chName of Object.keys(filteredDataMeta)) {
+            globalYmax[chName] = filteredDataMeta[chName].p99;
+          }
+        }
+        prevLabelKey = ''; _slowCacheKey = '';
+        drawWaveforms();
+        return;
+      }
+
+      const ch = filterableChannels[ci];
+      const st = getSignalType(ch.name);
+      const el = document.getElementById('filterProgress');
+      if (el) el.textContent = `Filtering: ${ch.name} [${st.type}] (${ci + 1}/${filterableChannels.length})`;
+
+      requestAnimationFrame(() => {
+        if (cancelled) { filterNext(); return; }
+
+        console.time('filter:' + ch.name);
+        const ds = psgFile.get(`signals/${ch.name}`);
+        const rawData = readDataset(ds);
+        const filtered = applyAASMFilter(rawData, ch.sfreq, st.type);
+        filteredData[ch.name] = filtered;
+        filterMemoryBytes += filtered.byteLength;
+
+        // (3) Precompute p99 for auto-scale
+        const step = Math.max(1, Math.floor(filtered.length / 100000));
+        const nSub = Math.ceil(filtered.length / step);
+        let sum = 0;
+        for (let i = 0; i < filtered.length; i += step) sum += filtered[i];
+        const mean = sum / nSub;
+        const absVals = new Float32Array(nSub);
+        let j = 0;
+        for (let i = 0; i < filtered.length; i += step) absVals[j++] = Math.abs(filtered[i] - mean);
+        absVals.sort();
+        const idx = Math.min(Math.floor(nSub * 0.99), nSub - 1);
+        filteredDataMeta[ch.name] = { p99: absVals[idx] || 1 };
+
+        console.timeEnd('filter:' + ch.name);
+        ci++;
+        setTimeout(filterNext, 0);
+      });
+    }
+
+    filterNext();
+    return;
+  }
+
+  // (4) Filter toggled OFF — keep filtered data in memory, just switch display
+  if (!filterEnabled && autoScaleGlobal) {
+    // Restore raw globalYmax from cache
+    const cacheKey = 'morpheus_globalYmax_' + lastFileName;
+    const cached = localStorage.getItem(cacheKey);
+    globalYmax = cached ? JSON.parse(cached) : {};
+  }
+  if (filterEnabled && autoScaleGlobal && Object.keys(filteredDataMeta).length > 0) {
+    // Re-apply filtered globalYmax
+    for (const chName of Object.keys(filteredDataMeta)) {
+      globalYmax[chName] = filteredDataMeta[chName].p99;
+    }
+  }
+
+  clearEpochCache();
+  prevLabelKey = ''; _slowCacheKey = '';
   drawWaveforms();
 };
 

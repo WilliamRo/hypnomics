@@ -332,9 +332,10 @@ input[type="file"] { display: none; }
 .help-panel {
   display: none; position: fixed; bottom: 16px; right: 16px;
   background: var(--bg-panel); border: 1px solid var(--border); border-radius: 8px;
-  padding: 16px 20px; font-family: 'JetBrains Mono', monospace; font-size: 12px;
+  padding: 16px 20px; font-family: 'JetBrains Mono', monospace; font-size: 11px !important;
   color: var(--text); z-index: 200; min-width: 240px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
 }
+.help-panel * { font-size: 11px !important; }
 /* Stage mode button */
 #stageModeBtn.active { border-color: #fb923c; color: #fb923c; background: rgba(251,146,60,0.1); }
 
@@ -352,7 +353,7 @@ input[type="file"] { display: none; }
 .anno-badge.readonly { background: rgba(100,116,139,0.15); color: var(--text-dim); }
 
 .help-panel.active { display: block; }
-.help-panel h3 { margin: 0 0 10px 0; font-size: 13px; color: var(--accent); font-weight: 500; }
+.help-panel h3 { margin: 0 0 10px 0; font-size: 12px !important; color: var(--accent); font-weight: 500; }
 .help-panel table { width: 100%; border-collapse: collapse; }
 .help-panel td { padding: 3px 0; vertical-align: top; }
 .help-panel td:first-child { color: var(--accent); padding-right: 12px; white-space: nowrap; }

@@ -160,6 +160,18 @@ let fixedYmax = {};  // e.g., { EEG_EOG: 75.0 }
 let pinnedChannels = {};   // { chName: ymaxValue }
 let isolatedChannels = {}; // { chName: true }
 
+// AASM bandpass filter state (session-only, recomputed on each file load)
+let filterEnabled = false;
+let filteredData = {};          // { chName: Float32Array }
+let filteredDataMeta = {};      // { chName: { p99 } }
+let filterMemoryBytes = 0;
+
+function clearFilteredData() {
+  filteredData = {};
+  filteredDataMeta = {};
+  filterMemoryBytes = 0;
+}
+
 // Data cache: avoids re-reading HDF5 on every redraw
 const epochCache = {}; // { "chName:epoch": { data, mean, std } }
 function clearEpochCache() {

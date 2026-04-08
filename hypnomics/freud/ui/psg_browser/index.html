@@ -17,14 +17,6 @@
     <div class="meta" id="fileMeta"></div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
-    <button class="btn" id="stageModeBtn" style="display:none;padding:4px 10px;font-size:11px;font-family:'JetBrains Mono',monospace" title="Toggle stage annotation mode">✏ Stage</button>
-    <div class="custom-select" id="annoSelectWrap" style="display:none">
-      <div class="custom-select-trigger" id="annoSelectTrigger">
-        <span id="annoSelectLabel">—</span>
-        <span class="custom-select-arrow">▾</span>
-      </div>
-      <div class="custom-select-dropdown" id="annoSelectDropdown"></div>
-    </div>
     <select id="annoSelect" style="position:absolute;visibility:hidden;pointer-events:none;width:0;height:0"></select>
     <button class="btn" id="openBtn">Open .psg.h5</button>
     <input type="file" id="fileInput" accept=".h5,.hdf5,.psg.h5">
@@ -47,7 +39,17 @@
   <div class="hypnogram-container" id="hypnogramContainer">
     <div class="hypnogram-label">
       <span>HYPNOGRAM</span>
-      <span id="hypnoTime"></span>
+      <div style="display:flex;align-items:center;gap:6px">
+        <div class="custom-select custom-select-sm" id="annoSelectWrap" style="display:none">
+          <div class="custom-select-trigger" id="annoSelectTrigger">
+            <span id="annoSelectLabel">—</span>
+            <span class="custom-select-arrow">▾</span>
+          </div>
+          <div class="custom-select-dropdown" id="annoSelectDropdown"></div>
+        </div>
+        <button class="btn" id="stageModeBtn" style="display:none;padding:2px 8px;font-size:10px;font-family:'JetBrains Mono',monospace" title="Toggle stage annotation mode">✏ Stage</button>
+        <span id="hypnoTime"></span>
+      </div>
     </div>
     <div class="hypnogram-body">
       <div class="hypnogram-yaxis" id="hypnoYAxis">
@@ -86,8 +88,13 @@
       <button class="nav-btn" id="nextBtn">&rarr;</button>
     </div>
     <div class="gain-group">
-      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim)">Global Auto-scale</span>
-      <label class="toggle-switch" id="autoScaleBtn">
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim)">AASM Filter</span>
+      <label class="toggle-switch">
+        <input type="checkbox" id="filterCheck">
+        <span class="toggle-slider"></span>
+      </label>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text-dim);margin-left:12px">Auto-scale</span>
+      <label class="toggle-switch">
         <input type="checkbox" id="autoScaleCheck">
         <span class="toggle-slider"></span>
       </label>
@@ -205,6 +212,7 @@
   </table>
   <hr style="border:none;border-top:1px solid var(--border);margin:10px 0 8px">
   <div id="helpStorage" style="color:var(--text-dim);font-size:11px"></div>
+  <div id="helpMemory" style="color:var(--text-dim);font-size:11px;margin-top:4px"></div>
 </div>
 
 <!-- Command bar -->
@@ -230,6 +238,7 @@
 
 <script src="lib/h5wasm.js"></script>
 <script src="js/config.js"></script>
+<script src="js/dsp.js"></script>
 <script src="js/state.js"></script>
 <script src="js/data.js"></script>
 <script src="js/hypnogram.js"></script>
