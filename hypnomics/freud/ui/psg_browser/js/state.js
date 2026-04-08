@@ -48,10 +48,19 @@ function stageName(labelInt) {
 function updateHypnoYAxis() {
   const el = document.getElementById('hypnoYAxis');
   el.innerHTML = '';
+  el.style.position = 'relative';
+  const h = hypnoHeight;
+  const pad = 4;
+  const plotH = h - pad * 2;
   for (let r = 0; r < STAGE_ROWS; r++) {
     const span = document.createElement('span');
     span.style.color = STAGE_COLOR_BY_ROW[r] || 'var(--text-dim)';
     span.textContent = STAGE_SHORT_BY_ROW[r] || '';
+    span.style.position = 'absolute';
+    span.style.right = '0';
+    const y = pad + (r / (STAGE_ROWS - 1)) * plotH;
+    span.style.top = y + 'px';
+    span.style.transform = 'translateY(-50%)';
     el.appendChild(span);
   }
 }

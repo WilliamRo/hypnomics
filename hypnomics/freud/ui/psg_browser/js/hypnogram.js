@@ -7,6 +7,7 @@
 // (Hardcoded stage constants removed — now using dynamic stageMap)
 
 function drawHypnogram() {
+  updateHypnoYAxis();
   const canvas = hypnogramCanvas;
   const ctx = canvas.getContext('2d');
   const w = canvas.width, h = canvas.height;
