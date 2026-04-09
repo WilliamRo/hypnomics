@@ -81,6 +81,19 @@
       <div class="waveform-divider" id="waveformDivider"></div>
       <canvas id="slowCanvas"></canvas>
     </div>
+    <!-- Analysis panel (right side, inline) -->
+    <div class="analysis-panel" id="analysisPanel">
+      <div class="analysis-resize" id="analysisResize"></div>
+      <div class="analysis-header">
+        <div class="analysis-tabs" id="analysisTabs"></div>
+        <button class="side-panel-close" id="analysisPanelClose">&times;</button>
+      </div>
+      <div class="analysis-body" id="analysisBody">
+        <canvas id="analysisCanvas"></canvas>
+        <div class="analysis-info" id="analysisInfo"></div>
+      </div>
+      <div class="analysis-controls" id="analysisControls"></div>
+    </div>
   </div>
 
   <!-- Controls -->
@@ -224,6 +237,7 @@
     <tr><td>c</td><td>Toggle channel panel</td></tr>
     <tr><td>t</td><td>Toggle H5 tree panel</td></tr>
     <tr><td>+ / -</td><td>Font size</td></tr>
+    <tr><td>S</td><td>Toggle spectrum panel</td></tr>
     <tr><td>:</td><td>Command palette</td></tr>
     <tr><td>?</td><td>Toggle this help</td></tr>
   </table>
@@ -240,6 +254,7 @@
       <input class="cmd-input" id="cmdInput" type="text" placeholder="command..." autocomplete="off" />
     </div>
     <div class="cmd-dropdown" id="cmdDropdown"></div>
+    <div class="cmd-empty" id="cmdEmpty" style="display:none">No commands found</div>
   </div>
 </div>
 
@@ -264,6 +279,9 @@
 <script src="js/panels.js"></script>
 <script src="js/annotations.js"></script>
 <script src="js/events.js"></script>
+<!-- Plugins: each file self-registers via registerPlugin(). Delete a <script> to remove. -->
+<script src="plugins/slow_wave_pct.js"></script>
+<script src="plugins/spectrum.js"></script>
 <script src="js/init.js"></script>
 </body>
 </html>

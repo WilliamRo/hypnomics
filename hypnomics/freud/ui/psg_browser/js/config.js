@@ -43,8 +43,20 @@ function getSignalColor(chName) {
   return darkMode ? st.dark : st.light;
 }
 
+// EEG sub-order by region: Fp/F → C → P → O, then by number/ref
+const _EEG_REGION_ORDER = { F: 0, C: 1, P: 2, O: 3, A: 4, T: 5 };
+
 function getSignalOrder(chName) {
-  return getSignalType(chName).order;
+  const st = getSignalType(chName);
+  if (st.type !== 'EEG') return st.order * 100;
+  // Extract electrode region from name (strip "EEG " prefix, take first part before "-")
+  const bare = chName.replace(/^eeg\s*/i, '').split('-')[0].trim();
+  const region = bare.charAt(0).toUpperCase();
+  const subOrder = _EEG_REGION_ORDER[region] ?? 6;
+  // Fpz before Fz before F3/F4; Pz before P3/P4
+  const isZ = /z/i.test(bare);
+  const isP = /p/i.test(bare.charAt(0));
+  return st.order * 100 + subOrder * 10 + (isZ ? 0 : 1);
 }
 
 // Legacy fallback

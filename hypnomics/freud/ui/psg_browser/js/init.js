@@ -189,12 +189,8 @@ initH5().then(() => {
   if (names.length > 0) {
     const list = document.getElementById('recentList');
     list.style.display = '';
-    // Show most recent first (lastFileName on top, then others)
-    const sorted = [...names].sort((a, b) => {
-      if (a === s.lastFileName) return -1;
-      if (b === s.lastFileName) return 1;
-      return 0;
-    });
+    // Show most recent first (last key in object = most recently opened)
+    const sorted = [...names].reverse();
     sorted.forEach(name => {
       const item = document.createElement('div');
       item.className = 'recent-item';

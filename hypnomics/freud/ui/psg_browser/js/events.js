@@ -11,6 +11,7 @@ function renderEpoch() {
   drawHypnogram();
   drawWaveforms();
   updateEpochInfo();
+  notifyAnalysisNavigate();
   lastEpochRender = Date.now();
   epochRenderPending = false;
 }
@@ -126,6 +127,32 @@ function toggleHelpPanel() {
   panel.classList.toggle('active');
   if (panel.classList.contains('active')) updateHelpPanelInfo();
 }
+
+// --- Analysis panel close + resize ---
+document.getElementById('analysisPanelClose').onclick = () => closeAnalysisPanel();
+
+let _analysisResizing = false, _analysisResizeStartX = 0, _analysisResizeStartW = 0;
+document.getElementById('analysisResize').onmousedown = (e) => {
+  _analysisResizing = true;
+  _analysisResizeStartX = e.clientX;
+  _analysisResizeStartW = analysisPanelWidth;
+  e.preventDefault();
+};
+document.addEventListener('mousemove', (e) => {
+  if (!_analysisResizing) return;
+  const delta = _analysisResizeStartX - e.clientX; // drag left = wider
+  analysisPanelWidth = Math.max(200, Math.min(600, _analysisResizeStartW + delta));
+  document.documentElement.style.setProperty('--analysis-width', analysisPanelWidth + 'px');
+  resizeCanvases();
+  drawHypnogram(); drawWaveforms();
+});
+document.addEventListener('mouseup', () => {
+  if (_analysisResizing) {
+    _analysisResizing = false;
+    _renderAnalysisPlugin();
+    saveSettings({ analysisPanelWidth });
+  }
+});
 
 // --- Help button (?) in controls bar ---
 document.getElementById('ctrlHelpBtn').onclick = (e) => {
@@ -397,6 +424,7 @@ document.onkeydown = (e) => {
   if (e.key === 'ArrowUp') navigate(-10);
   if (e.key === 'ArrowDown') navigate(10);
   if (e.key === '?') toggleHelpPanel();
+  if (e.key === 'S') toggleAnalysisPlugin('spectrum');
 };
 
 // --- Hypnogram click/drag ---
@@ -668,6 +696,7 @@ window.onresize = () => {
     resizeCanvases();
     drawHypnogram();
     drawWaveforms();
+    _renderAnalysisPlugin();
   }
 };
 

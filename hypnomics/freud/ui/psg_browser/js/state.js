@@ -105,7 +105,7 @@ async function loadFileFromIDB(key) {
 }
 
 // Per-file settings (recent files, max 20)
-const MAX_RECENT = 20;
+const MAX_RECENT = 100;
 function getFileSettings(fileName) {
   const s = loadSettings();
   return (s.recentFiles || {})[fileName] || {};
@@ -113,7 +113,10 @@ function getFileSettings(fileName) {
 function saveFileSettings(fileName, patch) {
   const s = loadSettings();
   const recent = s.recentFiles || {};
-  recent[fileName] = { ...(recent[fileName] || {}), ...patch };
+  // Move to end (most recent) by re-inserting
+  const existing = recent[fileName] || {};
+  delete recent[fileName];
+  recent[fileName] = { ...existing, ...patch };
   // Evict oldest if over limit
   const keys = Object.keys(recent);
   while (keys.length > MAX_RECENT) {

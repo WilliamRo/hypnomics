@@ -110,13 +110,117 @@ function onChannelsChanged() {
   saveSettings({ activeChannels });
   saveCurrentFileState();
   drawWaveforms();
+  _renderAnalysisPlugin();
+}
+
+// (11) Analysis panel
+const _analysisPlugins = [];  // registered plugins that use the analysis panel
+let _activeAnalysisPlugin = null;
+let analysisPanelWidth = savedSettings.analysisPanelWidth ?? 300;
+document.documentElement.style.setProperty('--analysis-width', analysisPanelWidth + 'px');
+
+function registerPlugin(plugin) {
+  // plugin: { name, description, category?, channels?, execute, render?, onNavigate? }
+  // render(canvas, info): draw into analysis panel
+  // onNavigate(): called on epoch change if panel is open with this plugin active
+  COMMANDS.push({
+    name: plugin.name,
+    hint: (plugin.category ? `[${plugin.category}] ` : '') + plugin.description,
+    fn: () => {
+      if (!psgFile) { alert('No file loaded.'); return; }
+      if (plugin.render) {
+        openAnalysisPanel(plugin);
+      } else {
+        plugin.execute();
+      }
+    },
+  });
+  if (plugin.render) _analysisPlugins.push(plugin);
+}
+
+function openAnalysisPanel(plugin) {
+  const panel = document.getElementById('analysisPanel');
+  panel.classList.add('active');
+  _activeAnalysisPlugin = plugin;
+  _buildAnalysisTabs();
+  _buildAnalysisControls();
+  resizeCanvases();
+  drawHypnogram(); drawWaveforms();
+  // Render after layout settles
+  requestAnimationFrame(() => _renderAnalysisPlugin());
+}
+
+function toggleAnalysisPlugin(name) {
+  if (!psgFile) return;
+  const panel = document.getElementById('analysisPanel');
+  // If already open with this plugin, close
+  if (panel.classList.contains('active') && _activeAnalysisPlugin && _activeAnalysisPlugin.name === name) {
+    closeAnalysisPanel();
+    return;
+  }
+  const plugin = _analysisPlugins.find(p => p.name === name);
+  if (plugin) openAnalysisPanel(plugin);
+}
+
+function closeAnalysisPanel() {
+  const panel = document.getElementById('analysisPanel');
+  panel.classList.remove('active');
+  _activeAnalysisPlugin = null;
+  resizeCanvases();
+  drawHypnogram(); drawWaveforms();
+}
+
+function _buildAnalysisTabs() {
+  const tabs = document.getElementById('analysisTabs');
+  tabs.innerHTML = '';
+  _analysisPlugins.forEach(p => {
+    const tab = document.createElement('div');
+    tab.className = 'analysis-tab' + (p === _activeAnalysisPlugin ? ' active' : '');
+    tab.textContent = p.name;
+    tab.onclick = () => {
+      _activeAnalysisPlugin = p;
+      _buildAnalysisTabs();
+      _buildAnalysisControls();
+      _renderAnalysisPlugin();
+    };
+    tabs.appendChild(tab);
+  });
+}
+
+function _buildAnalysisControls() {
+  const container = document.getElementById('analysisControls');
+  container.innerHTML = '';
+  container.classList.remove('active');
+  if (_activeAnalysisPlugin && _activeAnalysisPlugin.buildControls) {
+    _activeAnalysisPlugin.buildControls(container);
+    container.classList.add('active');
+  }
+}
+
+function _renderAnalysisPlugin() {
+  if (!_activeAnalysisPlugin || !_activeAnalysisPlugin.render) return;
+  const canvas = document.getElementById('analysisCanvas');
+  const info = document.getElementById('analysisInfo');
+  // Size canvas to container
+  const body = document.getElementById('analysisBody');
+  canvas.width = body.clientWidth;
+  canvas.height = body.clientHeight - info.offsetHeight;
+  info.innerHTML = '';
+  _activeAnalysisPlugin.render(canvas, info);
+}
+
+// Called by navigation to update active plugin
+function notifyAnalysisNavigate() {
+  if (!_activeAnalysisPlugin) return;
+  if (_activeAnalysisPlugin.onNavigate) {
+    _activeAnalysisPlugin.onNavigate();
+  } else if (_activeAnalysisPlugin.render) {
+    _renderAnalysisPlugin();
+  }
 }
 
 // (12) Command palette
-const COMMANDS = [
-  { name: 'showh5', hint: 'Show .h5 file structure', fn: cmdShowH5 },
-  { name: 'exportanno', hint: 'Export active annotation as .anno.json', fn: () => exportAnnotation(activeAnnoKey) },
-];
+const COMMANDS = [];
 
 let cmdBarOpen = false;
 let cmdActiveIdx = 0;
@@ -149,23 +253,34 @@ function highlightMatch(name, query) {
 function updateCmdDropdown(query) {
   const dd = document.getElementById('cmdDropdown');
   const shadow = document.getElementById('cmdShadow');
+  const empty = document.getElementById('cmdEmpty');
   dd.innerHTML = '';
   const q = query.toLowerCase().trim();
-  const filtered = q ? COMMANDS.filter(c => c.name.includes(q)) : COMMANDS;
+  const filtered = q ? COMMANDS.filter(c => c.name.includes(q) || (c.hint && c.hint.toLowerCase().includes(q))) : COMMANDS;
   cmdActiveIdx = Math.min(cmdActiveIdx, Math.max(0, filtered.length - 1));
 
-  // Shadow hint: show the active command's full name
-  if (filtered.length > 0 && q) {
-    const hint = filtered[cmdActiveIdx].name;
-    shadow.textContent = hint;
+  // Shadow hint — only show when query is a prefix
+  if (filtered.length > 0 && q && filtered[cmdActiveIdx].name.startsWith(q)) {
+    shadow.textContent = filtered[cmdActiveIdx].name;
   } else {
     shadow.textContent = '';
   }
 
+  // Empty state
+  if (empty) empty.style.display = filtered.length === 0 ? '' : 'none';
+
   filtered.forEach((cmd, i) => {
     const el = document.createElement('div');
     el.className = 'cmd-item' + (i === cmdActiveIdx ? ' active' : '');
-    el.innerHTML = `<span>${highlightMatch(cmd.name, q)}</span><span class="cmd-hint">${cmd.hint}</span>`;
+    // Extract category from hint "[Category] description"
+    let cat = '', desc = cmd.hint || '';
+    const m = desc.match(/^\[(.+?)\]\s*(.*)/);
+    if (m) { cat = m[1]; desc = m[2]; }
+    el.innerHTML = `<div class="cmd-item-row">`
+      + `<span class="cmd-name">${highlightMatch(cmd.name, q)}</span>`
+      + (cat ? `<span class="cmd-cat">${cat}</span>` : '')
+      + `</div>`
+      + (desc ? `<div class="cmd-desc">${desc}</div>` : '');
     el.onclick = () => { closeCmdBar(); cmd.fn(); };
     dd.appendChild(el);
   });
