@@ -190,6 +190,7 @@ function applyFastWindow(val) {
   drawHypnogram();
   drawWaveforms();
   updateEpochInfo();
+  notifyAnalysisNavigate();
 }
 
 document.getElementById('fastSelectTrigger').onclick = (e) => {

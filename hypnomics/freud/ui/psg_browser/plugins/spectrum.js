@@ -11,7 +11,7 @@
   let yMaxManual = 0.2; // used when density+!log
 
   // Right Y axis (band ratios)
-  let rLogScale = false;
+  let rLogScale = true;
   let rYMinLog = -3;    // ymin when log on (ymax fixed to 0)
   let rYMaxLin = 0.6;   // ymax when log off (ymin fixed to 0)
 
@@ -85,7 +85,7 @@
       // === Row 2: Left Y (PSD) ===
       const row2 = document.createElement('div'); row2.className = 'analysis-ctrl-row';
 
-      const yLabel = document.createElement('label'); yLabel.textContent = 'Y'; yLabel.style.color = _css('--text-dim');
+      const yLabel = document.createElement('label'); yLabel.textContent = 'L'; yLabel.style.color = _css('--text-dim');
       const yMinSl = document.createElement('input');
       yMinSl.type = 'range'; yMinSl.min = '-6'; yMinSl.max = '-1'; yMinSl.step = '0.5';
       yMinSl.value = yMinManual; yMinSl.style.maxWidth = '50px';
@@ -163,10 +163,10 @@
         return;
       }
 
-      // (1) EEG channels only
-      const eegChs = channels.filter(ch =>
-        activeChannels.includes(ch.name) && getSignalType(ch.name).type === 'EEG'
-      );
+      // (1) EEG channels only, sorted by region (F → C → P → O)
+      const eegChs = channels
+        .filter(ch => activeChannels.includes(ch.name) && getSignalType(ch.name).type === 'EEG')
+        .sort((a, b) => getSignalOrder(a.name) - getSignalOrder(b.name));
       if (eegChs.length === 0) {
         ctx.fillStyle = _css('--text-dim');
         ctx.font = '11px "JetBrains Mono", monospace';
