@@ -302,6 +302,40 @@ async function cmdShowH5() {
   body.innerHTML = '';
   body.appendChild(buildH5Tree(psgFile, '/'));
 
+  // Append traj/ group from the companion .traj.h5 (if loaded), with a
+  // checkbox on each leaf probe dataset. Checking adds the probe to the
+  // active slow-signal display; unchecking removes it.
+  if (trajFile && trajSignals.length > 0) {
+    // Default OPEN. An inverted sentinel is stored in expandedH5Paths when
+    // the user explicitly collapses, so the collapse state persists but
+    // first-time users see the probes without an extra click.
+    const TRAJ_ROOT_COLLAPSED_KEY = 'traj:root:collapsed';
+    const trajRootCollapsed = expandedH5Paths.has(TRAJ_ROOT_COLLAPSED_KEY);
+
+    const trajHeader = document.createElement('div');
+    trajHeader.className = trajRootCollapsed ? 'h5-group' : 'h5-group open';
+    trajHeader.textContent = 'traj/ (from ' + (lastTrajFileName || '.traj.h5') + ')';
+    // Same color used for traj traces and traj labels — resolved via the
+    // Traj SIGNAL_TYPES entry so dark/light themes are both covered.
+    trajHeader.style.color = getSignalColor('traj::');
+    body.appendChild(trajHeader);
+
+    const trajBody = document.createElement('div');
+    trajBody.className = 'h5-node';
+    trajBody.style.display = trajRootCollapsed ? 'none' : '';
+    trajBody.appendChild(buildTrajTreeWithCheckboxes());
+    body.appendChild(trajBody);
+
+    trajHeader.onclick = (e) => {
+      e.stopPropagation();
+      const nowOpen = trajHeader.classList.toggle('open');
+      if (nowOpen) expandedH5Paths.delete(TRAJ_ROOT_COLLAPSED_KEY);
+      else expandedH5Paths.add(TRAJ_ROOT_COLLAPSED_KEY);
+      trajBody.style.display = nowOpen ? '' : 'none';
+      try { saveTrajUIState(); } catch(_) {}
+    };
+  }
+
   // Append local annotations under annotations/
   try {
     const localKeys = await listLocalAnnoKeys(lastFileName);
@@ -406,22 +440,33 @@ function buildH5Tree(file, path) {
     const isGroup = child.keys !== undefined;
 
     if (isGroup) {
-      // Group
+      // Group. Honor remembered expansion state so toggling the tree panel
+      // doesn't collapse everything the user had opened.
+      const expandKey = 'psg:' + childPath;
+      const isExpanded = expandedH5Paths.has(expandKey);
+
       const groupEl = document.createElement('div');
-      groupEl.className = 'h5-group';
+      groupEl.className = isExpanded ? 'h5-group open' : 'h5-group';
       groupEl.textContent = key + '/';
 
       const childrenEl = document.createElement('div');
       childrenEl.className = 'h5-node';
-      childrenEl.style.display = 'none';
+      childrenEl.style.display = isExpanded ? '' : 'none';
+      if (isExpanded) {
+        // Eagerly rebuild children so deeper expansion state is restored too
+        childrenEl.appendChild(buildH5Tree(file, childPath));
+      }
 
       groupEl.onclick = (e) => {
         e.stopPropagation();
         const open = groupEl.classList.toggle('open');
+        if (open) expandedH5Paths.add(expandKey);
+        else expandedH5Paths.delete(expandKey);
         childrenEl.style.display = open ? '' : 'none';
         if (open && childrenEl.children.length === 0) {
           childrenEl.appendChild(buildH5Tree(file, childPath));
         }
+        try { saveTrajUIState(); } catch(_) {}
       };
 
       frag.appendChild(groupEl);
@@ -457,6 +502,158 @@ function buildH5Tree(file, path) {
       frag.appendChild(dsAttrs);
     }
   });
+
+  return frag;
+}
+
+// Build a 3-level nested tree of the loaded .traj.h5 (channel → tr → probe)
+// with a checkbox beside each probe leaf. Checking the box appends the probe
+// to `activeChannels` as a slow signal; unchecking removes it and redraws.
+// Honors `expandedH5Paths` so the previously-open sub-tree is restored when
+// the panel is re-rendered. Inline layout (no flex) so rows match the
+// surrounding .h5-dataset rows in font-size and line-height.
+function buildTrajTreeWithCheckboxes() {
+  const frag = document.createDocumentFragment();
+
+  // Group trajSignals by channel, then by tr
+  const byCh = new Map();
+  for (const sig of trajSignals) {
+    if (!byCh.has(sig.ch)) byCh.set(sig.ch, new Map());
+    const byTr = byCh.get(sig.ch);
+    const trKey = sig.tr + 's';
+    if (!byTr.has(trKey)) byTr.set(trKey, []);
+    byTr.get(trKey).push(sig);
+  }
+
+  for (const [ch, byTr] of byCh.entries()) {
+    const chPath = `traj/${ch}`;
+    const chExpanded = expandedH5Paths.has(chPath);
+
+    const chEl = document.createElement('div');
+    chEl.className = chExpanded ? 'h5-group open' : 'h5-group';
+    chEl.textContent = ch + '/';
+    frag.appendChild(chEl);
+
+    const chBody = document.createElement('div');
+    chBody.className = 'h5-node';
+    chBody.style.display = chExpanded ? '' : 'none';
+    chEl.onclick = (e) => {
+      e.stopPropagation();
+      const open = chEl.classList.toggle('open');
+      if (open) expandedH5Paths.add(chPath);
+      else expandedH5Paths.delete(chPath);
+      chBody.style.display = open ? '' : 'none';
+      try { saveTrajUIState(); } catch(_) {}
+    };
+    frag.appendChild(chBody);
+
+    for (const [trKey, sigs] of byTr.entries()) {
+      const trPath = `${chPath}/${trKey}`;
+      const trExpanded = expandedH5Paths.has(trPath);
+
+      const trEl = document.createElement('div');
+      trEl.className = trExpanded ? 'h5-group open' : 'h5-group';
+      trEl.textContent = trKey + '/';
+      chBody.appendChild(trEl);
+
+      const trBody = document.createElement('div');
+      trBody.className = 'h5-node';
+      trBody.style.display = trExpanded ? '' : 'none';
+      trEl.onclick = (e) => {
+        e.stopPropagation();
+        const open = trEl.classList.toggle('open');
+        if (open) expandedH5Paths.add(trPath);
+        else expandedH5Paths.delete(trPath);
+        trBody.style.display = open ? '' : 'none';
+        try { saveTrajUIState(); } catch(_) {}
+      };
+      chBody.appendChild(trBody);
+
+      for (const sig of sigs) {
+        // Match existing .h5-dataset inline-flow pattern. An inline-sized
+        // checkbox is prepended so the row keeps the same line-height as
+        // the surrounding dataset rows. We pin font-size/family explicitly
+        // because applyFontDelta walks form controls and caches their UA
+        // font-size (~13px), which otherwise compounds across rebuilds and
+        // makes the traj row visibly larger than the signals/ rows.
+        const row = document.createElement('div');
+        row.className = 'h5-dataset';
+        row.style.cssText = "font-size:11px;font-family:'JetBrains Mono',monospace;line-height:1.4";
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = activeChannels.includes(sig.name);
+        cb.style.cssText = 'vertical-align:middle;margin:0 4px 0 0;width:11px;height:11px;cursor:pointer;font-size:11px';
+        cb.onclick = (e) => e.stopPropagation();
+        cb.onchange = () => {
+          const idx = activeChannels.indexOf(sig.name);
+          if (cb.checked && idx < 0) {
+            activeChannels.push(sig.name);
+          } else if (!cb.checked && idx >= 0) {
+            activeChannels.splice(idx, 1);
+          }
+          try { saveSettings({ activeChannels }); } catch(_) {}
+          try { saveTrajUIState(); } catch(_) {}
+          try { refreshChannelPanel(); } catch(_) {}
+          try { drawWaveforms(); } catch(_) {}
+        };
+        row.appendChild(cb);
+
+        const meta = ` [${sig.length}] float32`;
+        row.insertAdjacentHTML('beforeend', `${sig.pk}<span class="h5-meta">${meta}</span>`);
+
+        // Per-probe log₁₀ toggle. Reuses the existing .toggle-switch style
+        // but scaled down to fit the tree row; a small "log" label precedes
+        // it. When toggled we invalidate both the slice cache and the
+        // auto-scale ymax, then redraw if the probe is currently active.
+        const logLabel = document.createElement('span');
+        logLabel.textContent = 'log';
+        logLabel.className = 'h5-meta';
+        logLabel.style.cssText = 'margin-left:10px;vertical-align:middle';
+        row.appendChild(logLabel);
+
+        const logSwitch = document.createElement('label');
+        logSwitch.className = 'toggle-switch';
+        logSwitch.title = 'Toggle log₁₀ transform for this probe';
+        logSwitch.style.cssText = 'vertical-align:middle;margin-left:4px;transform:scale(0.7);transform-origin:left center';
+        const logInput = document.createElement('input');
+        logInput.type = 'checkbox';
+        logInput.checked = trajLogEnabled.has(sig.name);
+        logInput.onclick = (e) => e.stopPropagation();
+        logInput.onchange = () => {
+          if (logInput.checked) trajLogEnabled.add(sig.name);
+          else trajLogEnabled.delete(sig.name);
+          // Evict cached slices for this sig (cache key includes L/R flag
+          // but the old entries are stale under the new unit semantics)
+          const prefix = `traj:${sig.name}:`;
+          for (const k of Object.keys(epochCache)) {
+            if (k.startsWith(prefix)) delete epochCache[k];
+          }
+          // Force recompute of auto-scale ymax under the new transform
+          delete globalYmax[sig.name];
+          // Force slow-cache invalidation (the key depends only on names,
+          // so flipping log wouldn't otherwise trigger a repaint)
+          if (typeof _slowCacheKey !== 'undefined') _slowCacheKey = '';
+          try { saveTrajUIState(); } catch(_) {}
+          if (activeChannels.includes(sig.name)) {
+            try { drawWaveforms(); } catch(_) {}
+          }
+          // If this probe is currently overlaid on the hypnogram, reload
+          // its full-night data under the new log mode and redraw.
+          if (hypnoTrajName === sig.name) {
+            try { reloadHypnoTrajOverlay(); } catch(_) {}
+          }
+        };
+        const logSlider = document.createElement('span');
+        logSlider.className = 'toggle-slider';
+        logSwitch.appendChild(logInput);
+        logSwitch.appendChild(logSlider);
+        row.appendChild(logSwitch);
+
+        trBody.appendChild(row);
+      }
+    }
+  }
 
   return frag;
 }

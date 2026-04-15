@@ -81,8 +81,10 @@ function drawTraces(ctx, w, chDataList, chHeight) {
     }
     ctx.stroke();
 
+    // Prefer unit from d.ch (works for both real channels and traj pseudo-
+    // channels); fall back to the global `channels` array for legacy paths.
     const ch = channels.find(c => c.name === d.chName);
-    const unit = ch?.unit || '';
+    const unit = d.ch?.unit || ch?.unit || '';
     labelData.push({ name: d.chName, sfreq: d.sfreq, color: d.color, yHalfRange: ymax, group, isFixed, isPinned, isIsolated, unit });
   });
   return labelData;
@@ -98,6 +100,12 @@ function drawWaveforms() {
     waveformDivider.classList.remove('active');
     slowCanvas.classList.remove('active');
     return;
+  }
+
+  // Ensure any active traj signals have a precomputed p99 in globalYmax
+  // while auto-scale is on. Cheap when nothing's missing.
+  if (autoScaleGlobal) {
+    try { ensureTrajGlobalYmax(); } catch(e) { console.warn(e); }
   }
 
   const sortedActive = [...activeChannels].sort((a, b) => getSignalOrder(a) - getSignalOrder(b));

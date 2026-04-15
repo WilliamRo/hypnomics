@@ -5,6 +5,12 @@
 // Signal type detection and ordering (Mucha palette)
 // ymaxGroup: channels sharing the same group get the same ymax
 const SIGNAL_TYPES = [
+  // Trajectory signals from .traj.h5 — prefix-matched FIRST so the embedded
+  // channel name (e.g., "EEG Fpz-Cz") doesn't accidentally hit the EEG entry.
+  // Keyed `traj::<ch>::<tr>s::<pk>`; always routed to the slow canvas.
+  // ymaxGroup is overridden per-probe in getYmaxGroup().
+  { type: 'Traj', order: 7, ymaxGroup: 'Traj', speed: 'slow', pattern: /^traj::/,
+    light: '#0d9488', dark: '#22d3ee' },
   { type: 'EOG', order: 0, ymaxGroup: 'EEG_EOG', speed: 'fast', pattern: /eog|e1|e2|^E1|^E2/i,
     light: '#1b4965', dark: '#5ba3d9' },
   { type: 'EEG', order: 1, ymaxGroup: 'EEG_EOG', speed: 'fast', pattern: /eeg|fpz|fz|cz|pz|oz|f3|f4|c3|c4|o1|o2|a1|a2|^F\d|^C\d|^O\d|^P\d/i,
@@ -19,7 +25,7 @@ const SIGNAL_TYPES = [
     light: '#1b4965', dark: '#5ba3d9' },
   { type: 'Limb', order: 6, ymaxGroup: 'Limb', speed: 'slow', pattern: /leg|limb|plm/i,
     light: '#6b4c6e', dark: '#a07ca3' },
-  { type: 'Other', order: 7, ymaxGroup: 'Other', speed: 'slow', pattern: /./,
+  { type: 'Other', order: 8, ymaxGroup: 'Other', speed: 'slow', pattern: /./,
     light: '#666666', dark: '#999999' },
 ];
 
@@ -31,6 +37,13 @@ function getSignalType(chName) {
 }
 
 function getYmaxGroup(chName) {
+  // Traj signals: group per probe key so the same probe on different
+  // channels shares y-scale, but different probes (e.g. POWER-30 vs
+  // PR-DELTA_TOTAL) auto-scale independently.
+  if (chName.startsWith('traj::')) {
+    const parts = chName.split('::');
+    return 'Traj:' + (parts[3] || parts[1] || '');
+  }
   return getSignalType(chName).ymaxGroup;
 }
 
@@ -101,6 +114,15 @@ const FALLBACK_MAPS = {
   // AASM convention: 0=W, 1=N1, 2=N2, 3=N3, 4=REM, 5=Unknown
   aasm: { 0: 'wake', 1: 'n1', 2: 'n2', 3: 'n3', 4: 'rem', 5: 'unknown' },
 };
+
+// Compact sampling-frequency display. 0.16666... -> "0.17 Hz", 100 -> "100 Hz".
+function formatSfreq(sf) {
+  if (!isFinite(sf) || sf <= 0) return '— Hz';
+  if (sf >= 100) return Math.round(sf) + ' Hz';
+  if (sf >= 10) return sf.toFixed(1) + ' Hz';
+  if (sf >= 1) return sf.toFixed(2).replace(/\.?0+$/, '') + ' Hz';
+  return sf.toFixed(2) + ' Hz';
+}
 
 function formatTime(seconds) {
   const h = Math.floor(seconds / 3600);

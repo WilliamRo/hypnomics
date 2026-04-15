@@ -41,6 +41,65 @@ function drawHypnogram() {
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
   }
 
+  // (6.0) Traj background overlay — middle-click a traj label to toggle.
+  // Whole-night trajectory drawn in gray, scaled so the p_margin /
+  // (100 - p_margin) percentiles align with the N3 / W rows. Invertible.
+  if (hypnoTrajName && hypnoTrajRawData && hypnoTrajRawData.length > 0 &&
+      hypnoTrajTr > 0) {
+    const n = hypnoTrajRawData.length;
+    const tr = hypnoTrajTr;
+    const denom = (hypnoTrajPHigh - hypnoTrajPLow) || 1;
+    const yW = stageYFromRow(0);
+    const yN3 = stageYFromRow(STAGE_ROWS - 1);
+    // Map normalized value [0..1] to y: 0 → N3 row, 1 → W row
+    // (inverted: 0 → W row, 1 → N3 row)
+    const yForValue = hypnoTrajInvert
+      ? (v) => yW + ((v - hypnoTrajPLow) / denom) * (yN3 - yW)
+      : (v) => yN3 - ((v - hypnoTrajPLow) / denom) * (yN3 - yW);
+
+    ctx.strokeStyle = darkMode ? 'rgba(200,200,200,0.38)' : 'rgba(80,80,80,0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    let started = false;
+    // Skip samples whose time falls outside the visible window (cheap clip)
+    const iFirst = Math.max(0, Math.floor(tStart / tr));
+    const iLast  = Math.min(n - 1, Math.ceil(tEnd / tr));
+    // Downsample when there are more samples than pixels (keeps polyline
+    // cost bounded for high-resolution trajectories).
+    const span = iLast - iFirst + 1;
+    if (span <= w * 2) {
+      for (let i = iFirst; i <= iLast; i++) {
+        const v = hypnoTrajRawData[i];
+        if (!isFinite(v)) { started = false; continue; }
+        const x = timeToX(i * tr);
+        const y = yForValue(v);
+        if (!started) { ctx.moveTo(x, y); started = true; }
+        else ctx.lineTo(x, y);
+      }
+    } else {
+      // Min/max decimation per pixel column
+      const samplesPerPx = span / w;
+      for (let px = 0; px < w; px++) {
+        const i0 = iFirst + Math.floor(px * samplesPerPx);
+        const i1 = Math.min(iLast, iFirst + Math.floor((px + 1) * samplesPerPx));
+        let mn = Infinity, mx = -Infinity;
+        for (let i = i0; i <= i1; i++) {
+          const v = hypnoTrajRawData[i];
+          if (!isFinite(v)) continue;
+          if (v < mn) mn = v;
+          if (v > mx) mx = v;
+        }
+        if (mn === Infinity) { started = false; continue; }
+        const yMin = yForValue(mx);
+        const yMax = yForValue(mn);
+        if (!started) { ctx.moveTo(px, yMin); started = true; }
+        else ctx.lineTo(px, yMin);
+        ctx.lineTo(px, yMax);
+      }
+    }
+    ctx.stroke();
+  }
+
   // Draw staircase (only visible portion, skip unknown stages)
   ctx.lineWidth = 1.5;
   let prevDrawnRow = null;

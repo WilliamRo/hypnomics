@@ -18,6 +18,8 @@
   </div>
   <div style="display:flex;align-items:center;gap:8px">
     <select id="annoSelect" style="position:absolute;visibility:hidden;pointer-events:none;width:0;height:0"></select>
+    <button class="btn" id="loadTrajBtn" style="display:none">Load .traj.h5</button>
+    <input type="file" id="trajInput" accept=".h5,.hdf5,.traj.h5">
     <button class="btn" id="openBtn">Open .psg.h5</button>
     <input type="file" id="fileInput" accept=".h5,.hdf5,.psg.h5">
     <button class="btn" id="configBtn" title="Settings" style="padding:3px 8px;font-size:13px">⚙</button>
@@ -213,6 +215,23 @@
   <div class="config-section" style="display:flex;align-items:center;justify-content:space-between">
     <label style="margin:0" id="themeModeLabel">Dark Mode</label>
     <button class="btn" id="themeToggle" style="padding:4px 10px;font-size:14px"></button>
+  </div>
+  <div id="trajOverlayControls" style="display:none">
+    <hr style="border:none;border-top:1px solid var(--border);margin:10px 0 12px">
+    <div class="config-section">
+      <div style="display:flex;align-items:baseline;justify-content:space-between;color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">
+        <span style="font-size:11px">Traj Overlay Percentile Margin</span>
+        <span id="hypnoTrajPctMarginValue" style="font-size:11px;color:var(--text);text-transform:none;letter-spacing:0">1</span>
+      </div>
+      <input type="range" id="hypnoTrajPctMarginSlider" min="1" max="5" step="1" value="1" style="width:100%;display:block">
+    </div>
+    <div class="config-section" style="display:flex;align-items:center;justify-content:space-between">
+      <label style="margin:0">Invert Traj Overlay</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="hypnoTrajInvertCheck">
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
   </div>
 </div>
 

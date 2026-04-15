@@ -174,6 +174,36 @@ document.getElementById('themeToggle').onclick = () => {
   drawWaveforms();
 };
 
+// --- Traj overlay: percentile margin slider ---
+const hypnoTrajPctMarginSlider = document.getElementById('hypnoTrajPctMarginSlider');
+const hypnoTrajPctMarginValue = document.getElementById('hypnoTrajPctMarginValue');
+if (hypnoTrajPctMarginSlider && hypnoTrajPctMarginValue) {
+  hypnoTrajPctMarginSlider.value = String(hypnoTrajPctMargin);
+  hypnoTrajPctMarginValue.textContent = String(hypnoTrajPctMargin);
+  hypnoTrajPctMarginSlider.oninput = () => {
+    hypnoTrajPctMargin = parseInt(hypnoTrajPctMarginSlider.value, 10) || 1;
+    hypnoTrajPctMarginValue.textContent = String(hypnoTrajPctMargin);
+    saveSettings({ hypnoTrajPctMargin });
+    if (hypnoTrajRawData) {
+      try { recomputeHypnoTrajPercentiles(); } catch(_) {}
+      try { drawHypnogram(); } catch(_) {}
+    }
+  };
+}
+
+// --- Traj overlay: invert toggle ---
+const hypnoTrajInvertCheck = document.getElementById('hypnoTrajInvertCheck');
+if (hypnoTrajInvertCheck) {
+  hypnoTrajInvertCheck.checked = !!hypnoTrajInvert;
+  hypnoTrajInvertCheck.onchange = () => {
+    hypnoTrajInvert = hypnoTrajInvertCheck.checked;
+    saveSettings({ hypnoTrajInvert });
+    if (hypnoTrajRawData) {
+      try { drawHypnogram(); } catch(_) {}
+    }
+  };
+}
+
 // --- Fast window selector ---
 const fastSelect = document.getElementById('fastWindowSelect');
 fastSelect.value = fastWindowSec;
@@ -257,6 +287,14 @@ openBtn.onclick = () => fileInput.click();
 fileInput.onchange = async (e) => {
   const file = e.target.files[0];
   if (file) loadFile(await file.arrayBuffer(), { fileName: file.name });
+};
+
+// --- Load companion .traj.h5 ---
+loadTrajBtn.onclick = () => trajInput.click();
+trajInput.onchange = async (e) => {
+  const file = e.target.files[0];
+  trajInput.value = '';
+  if (file) loadTrajFile(await file.arrayBuffer(), { fileName: file.name });
 };
 
 // Drag and drop

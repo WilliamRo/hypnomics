@@ -217,6 +217,75 @@ const viewer = document.getElementById('viewer');
 const loading = document.getElementById('loading');
 const fileInput = document.getElementById('fileInput');
 const openBtn = document.getElementById('openBtn');
+const loadTrajBtn = document.getElementById('loadTrajBtn');
+const trajInput = document.getElementById('trajInput');
+let trajFile = null;
+let lastTrajFileName = null;
+// Trajectory "signals" derived from .traj.h5 — parallel to `channels`.
+// Each entry: { name (unique id `traj::<ch>::<tr>s::<pk>`), displayName,
+//               ch, tr, pk, sfreq (=1/tr), length (= n_epochs), unit: '' }
+let trajSignals = [];
+// Names of traj signals for which the log₁₀ transform is currently active.
+// When present, readTrajData returns log10(max(v, 1e-12)) instead of raw v,
+// and computeTrajGlobalYmax / drawTraces operate in log space.
+let trajLogEnabled = new Set();
+
+// Hypnogram background overlay: a single whole-night traj rendered in gray
+// behind the staircase, scaled so that the p_margin / (100-p_margin)
+// percentiles align with the N3 and W rows respectively.
+let hypnoTrajName = null;               // which traj is overlaid (null = none)
+let hypnoTrajRawData = null;            // Float32Array (full night, log-applied if the sig has log mode)
+let hypnoTrajTr = 0;                    // time resolution in seconds
+let hypnoTrajPLow = 0;                  // percentile at margin%
+let hypnoTrajPHigh = 1;                 // percentile at (100 - margin)%
+// User preferences (persist via saveSettings)
+let hypnoTrajPctMargin = savedSettings.hypnoTrajPctMargin ?? 1;  // 1–5
+let hypnoTrajInvert = savedSettings.hypnoTrajInvert ?? false;    // flip W↔N3 mapping
+
+// Persist traj-related UI state (which probes are active, which have log
+// mode on, and which h5 tree nodes are expanded) to the current PSG's
+// per-file settings. Called from the checkbox / log-toggle / tree-expand
+// handlers so loading a PSG via recent history restores everything.
+function saveTrajUIState() {
+  if (!lastFileName) return;
+  try {
+    saveFileSettings(lastFileName, {
+      activeTrajChannels: activeChannels.filter(
+        n => typeof n === 'string' && n.startsWith('traj::')),
+      trajLogEnabled: Array.from(trajLogEnabled),
+      expandedH5Paths: Array.from(expandedH5Paths),
+    });
+  } catch(_) {}
+}
+
+// Transient toast notification. Fades in, holds for `ms`, then fades out.
+// Non-blocking; multiple calls stack vertically.
+function showToast(msg, ms = 2200) {
+  const el = document.createElement('div');
+  el.textContent = msg;
+  el.style.cssText =
+    "position:fixed;top:62px;left:50%;transform:translateX(-50%);" +
+    "background:var(--bg-panel);border:1px solid var(--accent);" +
+    "color:var(--text);font-family:'JetBrains Mono',monospace;font-size:12px;" +
+    "padding:8px 16px;border-radius:4px;z-index:9999;pointer-events:none;" +
+    "box-shadow:0 4px 14px rgba(0,0,0,0.35);opacity:0;" +
+    "transition:opacity 0.3s ease";
+  document.body.appendChild(el);
+  // Stack vertically if there are already visible toasts
+  const existing = document.querySelectorAll('[data-morpheus-toast]');
+  el.dataset.morpheusToast = '1';
+  el.style.top = (62 + existing.length * 36) + 'px';
+  requestAnimationFrame(() => { el.style.opacity = '1'; });
+  setTimeout(() => {
+    el.style.opacity = '0';
+    setTimeout(() => { try { el.remove(); } catch(_) {} }, 400);
+  }, ms);
+}
+// H5 tree panel expansion memory. Keys are arbitrary path strings
+// ("psg:/annotations/stage Ground-Truth", "traj/EEG Fpz-Cz/6s", etc.)
+// identifying nodes that should be drawn open on the next panel rebuild.
+// Cleared when a new .psg.h5 is loaded (paths are file-specific).
+let expandedH5Paths = new Set();
 const fileMeta = document.getElementById('fileMeta');
 const hypnogramCanvas = document.getElementById('hypnogramCanvas');
 const waveformCanvas = document.getElementById('waveformCanvas');

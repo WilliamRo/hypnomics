@@ -7,7 +7,13 @@ function buildWaveformLabels(labelData, chHeights) {
   currentLabelData = labelData;
   const heights = Array.isArray(chHeights) ? chHeights : labelData.map(() => chHeights);
   const container = document.getElementById('waveformLabels');
-  const labelKey = labelData.map((d, i) => d.name + ':' + heights[i]).join(',');
+  // Include traj log state in the key so toggling log on a probe forces a
+  // full rebuild (the label text changes from "PROBE" to "log PROBE").
+  const labelKey = labelData.map((d, i) => {
+    const isTrajLog = typeof d.name === 'string' && d.name.startsWith('traj::') &&
+                      typeof trajLogEnabled !== 'undefined' && trajLogEnabled.has(d.name);
+    return d.name + ':' + heights[i] + (isTrajLog ? ':L' : '');
+  }).join(',');
   const needsFullRebuild = labelKey !== prevLabelKey;
 
   // Compute cumulative Y positions
@@ -37,17 +43,44 @@ function buildWaveformLabels(labelData, chHeights) {
       el.style.height = heights[i] + 'px';
       el.style.cursor = 'pointer';
 
-      const nameSpan = document.createElement('div');
-      nameSpan.className = 'waveform-label-name';
-      nameSpan.style.color = d.color;
-      nameSpan.textContent = d.name;
+      const isTraj = typeof d.name === 'string' && d.name.startsWith('traj::');
+      if (isTraj) {
+        // 3-row layout: source channel name / probe name / sampling frequency
+        const parts = d.name.split('::');
+        const source = parts[1] || '';
+        const probe  = parts[3] || '';
+        const isLog = typeof trajLogEnabled !== 'undefined' && trajLogEnabled.has(d.name);
 
-      const infoSpan = document.createElement('div');
-      infoSpan.className = 'waveform-label-info';
-      infoSpan.textContent = d.sfreq + ' Hz';
+        const nameSpan = document.createElement('div');
+        nameSpan.className = 'waveform-label-name';
+        nameSpan.style.color = d.color;
+        nameSpan.textContent = source;
 
-      el.appendChild(nameSpan);
-      el.appendChild(infoSpan);
+        const probeSpan = document.createElement('div');
+        probeSpan.className = 'waveform-label-info';
+        probeSpan.style.color = d.color;
+        probeSpan.textContent = isLog ? ('log ' + probe) : probe;
+
+        const infoSpan = document.createElement('div');
+        infoSpan.className = 'waveform-label-info';
+        infoSpan.textContent = formatSfreq(d.sfreq);
+
+        el.appendChild(nameSpan);
+        el.appendChild(probeSpan);
+        el.appendChild(infoSpan);
+      } else {
+        const nameSpan = document.createElement('div');
+        nameSpan.className = 'waveform-label-name';
+        nameSpan.style.color = d.color;
+        nameSpan.textContent = d.name;
+
+        const infoSpan = document.createElement('div');
+        infoSpan.className = 'waveform-label-info';
+        infoSpan.textContent = formatSfreq(d.sfreq);
+
+        el.appendChild(nameSpan);
+        el.appendChild(infoSpan);
+      }
 
       // Right-click context menu for pin/isolate
       el.oncontextmenu = ((idx) => (e) => {
@@ -56,6 +89,21 @@ function buildWaveformLabels(labelData, chHeights) {
         if (!live) return;
         showLabelCtxMenu(e.clientX, e.clientY, live);
       })(i);
+
+      // Middle-click on a traj label → toggle whole-night overlay on
+      // the hypnogram background. mousedown is used because `click`
+      // doesn't fire reliably for the middle button across browsers.
+      el.onmousedown = ((idx) => (e) => {
+        if (e.button !== 1) return;
+        e.preventDefault();
+        const live = currentLabelData[idx];
+        if (!live || typeof live.name !== 'string' ||
+            !live.name.startsWith('traj::')) return;
+        try { setHypnoTrajOverlay(live.name); } catch(err) { console.warn(err); }
+      })(i);
+      // Some browsers still emit auxclick for middle; swallow it to
+      // avoid double-toggling.
+      el.onauxclick = (e) => { if (e.button === 1) e.preventDefault(); };
 
       container.appendChild(el);
     });
