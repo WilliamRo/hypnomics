@@ -193,6 +193,10 @@ async function switchAnnotation(key) {
     drawHypnogram();
     drawWaveforms();
     updateEpochInfo();
+    // Refresh H5 tree panel if open so the new local annotation appears
+    if (document.getElementById('sidePanel').classList.contains('active')) {
+      cmdShowH5();
+    }
     return;
   }
 
@@ -287,6 +291,17 @@ async function loadLocalAnno(fileName, annoKey) {
     const req = tx.objectStore(IDB_STORE).get(localAnnoIDBKey(fileName, annoKey));
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
+  });
+}
+
+// Delete annotation from IDB
+async function deleteLocalAnno(fileName, annoKey) {
+  const db = await openIDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).delete(localAnnoIDBKey(fileName, annoKey));
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 }
 

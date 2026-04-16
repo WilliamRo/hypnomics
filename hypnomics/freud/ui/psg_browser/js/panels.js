@@ -340,26 +340,52 @@ async function cmdShowH5() {
   try {
     const localKeys = await listLocalAnnoKeys(lastFileName);
     if (localKeys.length > 0) {
+      // Default OPEN — inverted sentinel: key present = collapsed
+      const LOCAL_ANNO_COLLAPSED_KEY = 'local-anno:root:collapsed';
+      const localRootCollapsed = expandedH5Paths.has(LOCAL_ANNO_COLLAPSED_KEY);
+
       const localHeader = document.createElement('div');
-      localHeader.className = 'h5-group open';
+      localHeader.className = localRootCollapsed ? 'h5-group' : 'h5-group open';
       localHeader.textContent = 'annotations/ (local)';
       localHeader.style.color = '#fb923c';
       body.appendChild(localHeader);
 
       const localNode = document.createElement('div');
       localNode.className = 'h5-node';
+      localNode.style.display = localRootCollapsed ? 'none' : '';
+
+      localHeader.onclick = (e) => {
+        e.stopPropagation();
+        const nowOpen = localHeader.classList.toggle('open');
+        if (nowOpen) expandedH5Paths.delete(LOCAL_ANNO_COLLAPSED_KEY);
+        else expandedH5Paths.add(LOCAL_ANNO_COLLAPSED_KEY);
+        localNode.style.display = nowOpen ? '' : 'none';
+      };
+
       for (const key of localKeys) {
         const anno = await loadLocalAnno(lastFileName, key);
         if (!anno) continue;
 
+        const annoCollapseKey = `local-anno:${key}:collapsed`;
+        const annoCollapsed = expandedH5Paths.has(annoCollapseKey);
+
         const grpEl = document.createElement('div');
-        grpEl.className = 'h5-group open';
+        grpEl.className = annoCollapsed ? 'h5-group' : 'h5-group open';
         grpEl.textContent = key + '/';
         grpEl.style.color = '#fb923c';
         localNode.appendChild(grpEl);
 
         const details = document.createElement('div');
         details.className = 'h5-node';
+        details.style.display = annoCollapsed ? 'none' : '';
+
+        grpEl.onclick = (e) => {
+          e.stopPropagation();
+          const open = grpEl.classList.toggle('open');
+          if (open) expandedH5Paths.delete(annoCollapseKey);
+          else expandedH5Paths.add(annoCollapseKey);
+          details.style.display = open ? '' : 'none';
+        };
 
         const labelsEl = document.createElement('div');
         labelsEl.className = 'h5-dataset';
@@ -384,14 +410,47 @@ async function cmdShowH5() {
         modEl.textContent = 'modified: true (stored in IDB)';
         details.appendChild(modEl);
 
-        // Export button
+        // Export + Delete buttons
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'margin:4px 0 4px 16px;display:flex;gap:4px';
+
         const expBtn = document.createElement('button');
         expBtn.className = 'btn';
-        expBtn.style.cssText = 'margin:4px 0 4px 16px;font-size:9px;padding:2px 8px';
-        expBtn.textContent = '⬇ Export .anno.json';
-        expBtn.onclick = () => exportAnnotation(key);
-        details.appendChild(expBtn);
+        expBtn.style.cssText = 'font-size:9px;padding:2px 8px';
+        expBtn.textContent = '\u2B07 Export .anno.json';
+        expBtn.onclick = (e) => { e.stopPropagation(); exportAnnotation(key); };
+        btnRow.appendChild(expBtn);
 
+        const delBtn = document.createElement('button');
+        delBtn.className = 'btn';
+        delBtn.style.cssText = 'font-size:9px;padding:2px 8px;color:#ef4444';
+        delBtn.textContent = '\u2716 Delete';
+        delBtn.onclick = async (e) => {
+          e.stopPropagation();
+          const shortName = key.replace('stage ', '');
+          if (!confirm('Delete local annotation "' + shortName + '"?\nThis cannot be undone.')) return;
+          await deleteLocalAnno(lastFileName, key);
+          const idx = annoKeys.indexOf(key);
+          if (idx >= 0) annoKeys.splice(idx, 1);
+          if (activeAnnoKey === key) {
+            if (annoKeys.length > 0) {
+              await switchAnnotation(annoKeys[0]);
+            } else {
+              activeAnnoKey = '';
+              annotations = null;
+              buildAnnoSelect();
+              drawHypnogram();
+              drawWaveforms();
+              updateEpochInfo();
+            }
+          } else {
+            buildAnnoSelect();
+          }
+          cmdShowH5();
+        };
+        btnRow.appendChild(delBtn);
+
+        details.appendChild(btnRow);
         localNode.appendChild(details);
       }
       body.appendChild(localNode);
