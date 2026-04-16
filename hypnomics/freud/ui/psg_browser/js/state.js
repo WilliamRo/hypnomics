@@ -242,6 +242,9 @@ let hypnoTrajPHigh = 1;                 // percentile at (100 - margin)%
 let hypnoTrajPctMargin = savedSettings.hypnoTrajPctMargin ?? 1;  // 1–5
 let hypnoTrajInvert = savedSettings.hypnoTrajInvert ?? false;    // flip W↔N3 mapping
 
+// Show/hide hypnogram staircase (toggle in hypnogram label bar)
+let showHypnogram = savedSettings.showHypnogram ?? true;
+
 // Persist traj-related UI state (which probes are active, which have log
 // mode on, and which h5 tree nodes are expanded) to the current PSG's
 // per-file settings. Called from the checkbox / log-toggle / tree-expand

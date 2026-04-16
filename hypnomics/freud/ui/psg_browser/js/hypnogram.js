@@ -15,10 +15,8 @@ function drawHypnogram() {
   ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-surface').trim();
   ctx.fillRect(0, 0, w, h);
 
-  if (!annotations) return;
+  if (totalEpochs <= 0) return;
 
-  const intervals = annotations.intervals;
-  const labels = annotations.labels;
   const pad = 4;
   const plotH = h - pad * 2;
 
@@ -100,40 +98,44 @@ function drawHypnogram() {
     ctx.stroke();
   }
 
-  // Draw staircase (only visible portion, skip unknown stages)
-  ctx.lineWidth = 1.5;
-  let prevDrawnRow = null;
-  for (let i = 0; i < labels.length; i++) {
-    const t0 = intervals[i * 2];
-    const t1 = intervals[i * 2 + 1];
-    if (t1 <= tStart || t0 >= tEnd) continue;
+  // Draw staircase (only when annotations exist AND showHypnogram is true)
+  if (annotations && showHypnogram) {
+    const intervals = annotations.intervals;
+    const labels = annotations.labels;
+    ctx.lineWidth = 1.5;
+    let prevDrawnRow = null;
+    for (let i = 0; i < labels.length; i++) {
+      const t0 = intervals[i * 2];
+      const t1 = intervals[i * 2 + 1];
+      if (t1 <= tStart || t0 >= tEnd) continue;
 
-    const row = stageRow(labels[i]);
-    if (row === undefined) { prevDrawnRow = null; continue; } // gap for unknown
+      const row = stageRow(labels[i]);
+      if (row === undefined) { prevDrawnRow = null; continue; } // gap for unknown
 
-    const color = stageColor(labels[i]);
-    const x0 = timeToX(Math.max(t0, tStart));
-    const x1 = timeToX(Math.min(t1, tEnd));
-    const y = stageYFromRow(row);
+      const color = stageColor(labels[i]);
+      const x0 = timeToX(Math.max(t0, tStart));
+      const x1 = timeToX(Math.min(t1, tEnd));
+      const y = stageYFromRow(row);
 
-    ctx.strokeStyle = color;
-    ctx.lineWidth = (row === 1) ? 7.5 : 1.5; // REM (row 1) is 5x thicker
-    ctx.beginPath();
-
-    // Vertical transition from previous known stage
-    if (prevDrawnRow !== null && prevDrawnRow !== row && t0 >= tStart) {
-      ctx.lineWidth = 1.5; // transitions stay thin
-      ctx.moveTo(x0, stageYFromRow(prevDrawnRow));
-      ctx.lineTo(x0, y);
-      ctx.stroke();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = (row === 1) ? 7.5 : 1.5; // REM (row 1) is 5x thicker
       ctx.beginPath();
-      ctx.lineWidth = (row === 1) ? 7.5 : 1.5;
-    }
 
-    ctx.moveTo(x0, y);
-    ctx.lineTo(x1, y);
-    ctx.stroke();
-    prevDrawnRow = row;
+      // Vertical transition from previous known stage
+      if (prevDrawnRow !== null && prevDrawnRow !== row && t0 >= tStart) {
+        ctx.lineWidth = 1.5; // transitions stay thin
+        ctx.moveTo(x0, stageYFromRow(prevDrawnRow));
+        ctx.lineTo(x0, y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.lineWidth = (row === 1) ? 7.5 : 1.5;
+      }
+
+      ctx.moveTo(x0, y);
+      ctx.lineTo(x1, y);
+      ctx.stroke();
+      prevDrawnRow = row;
+    }
   }
 
   // (6.1) Current epoch marker — orange dashed bracket + triangle

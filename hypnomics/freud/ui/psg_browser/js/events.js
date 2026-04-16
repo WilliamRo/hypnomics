@@ -87,6 +87,13 @@ document.addEventListener('click', (e) => {
   if (wrap && !wrap.contains(e.target)) wrap.classList.remove('open');
 });
 
+// --- Show Hypnogram toggle ---
+document.getElementById('showHypnoCheck').onchange = (e) => {
+  showHypnogram = e.target.checked;
+  saveSettings({ showHypnogram });
+  drawHypnogram();
+};
+
 // --- Stage mode toggle ---
 document.getElementById('stageModeCheck').onchange = (e) => {
   toggleStageMode();

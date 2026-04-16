@@ -20,6 +20,13 @@ function isStageEditable() {
   return activeAnnoKey && isLocalAnnotation(activeAnnoKey);
 }
 
+function updateShowHypnoToggle() {
+  const show = !!annotations;
+  document.getElementById('showHypnoLabel').style.display = show ? '' : 'none';
+  document.getElementById('showHypnoBtn').style.display = show ? '' : 'none';
+  document.getElementById('showHypnoCheck').checked = showHypnogram;
+}
+
 function updateStageModeBtn() {
   const btn = document.getElementById('stageModeBtn');
   const label = document.getElementById('stageModeLabel');
@@ -77,6 +84,7 @@ function buildAnnoSelect() {
   sel.appendChild(newOpt);
 
   sel.value = activeAnnoKey;
+  updateShowHypnoToggle();
   updateStageModeBtn();
   syncCustomAnnoSelect();
 }
