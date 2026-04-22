@@ -21,36 +21,37 @@ import numpy as np
 class Stager:
   """Protocol for sleep staging models.
 
+  Input: a `PSG` object (from `hypnomics.protocol.psg`).
   Label convention: 0=W, 1=N1, 2=N2, 3=N3, 4=REM.
   """
 
-  def predict(self, sg) -> np.ndarray:
-    """Predict per-epoch stage labels for a SignalGroup.
+  def predict(self, psg) -> np.ndarray:
+    """Predict per-epoch stage labels for a PSG.
 
     Returns:
       np.ndarray of int labels with shape (n_epochs,).
     """
     raise NotImplementedError
 
-  def predict_proba(self, sg) -> np.ndarray:
-    """Predict per-epoch stage probabilities for a SignalGroup.
+  def predict_proba(self, psg) -> np.ndarray:
+    """Predict per-epoch stage probabilities for a PSG.
 
     Returns:
       np.ndarray of float with shape (n_epochs, 5).
     """
     raise NotImplementedError
 
-  def check_channel(self, sg) -> bool:
-    """Check whether the SignalGroup has compatible channels.
+  def check_channel(self, psg) -> bool:
+    """Check whether the PSG has compatible channels.
 
     Returns True by default. Override to enforce channel requirements.
     Logs a warning when returning False.
     """
     return True
 
-  def _warn_channel(self, sg, reason=''):
+  def _warn_channel(self, psg, reason=''):
     """Log a channel incompatibility warning."""
-    msg = f"Channel check failed for '{sg.label}'"
+    msg = f"Channel check failed for '{psg.label}'"
     if reason:
       msg += f': {reason}'
     console.show_status(msg, prompt='[Warning]')

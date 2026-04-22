@@ -27,8 +27,12 @@ import numpy as np
 
 
 
-_BUFFER = {}  # Don't use, for compatibility only
 MT_ADAPTIVE = True
+
+# Denominator floor for relative-power ratios. simps of a non-negative PSD
+# is >= 0; anything below this is effectively a dead/flat channel and would
+# otherwise produce spurious 1e6-scale ratios via the old `+ 1e-6` hack.
+_PR_ZERO_EPS = 1e-12
 
 # Be consistent with the default `bandwidth` in multitaper method
 WEL_FREQ_RESOLUTION = 0.125
@@ -91,7 +95,8 @@ def estimate_power(s: np.ndarray, fs: float, fmin=0.5, fmax=30,
   assert band_ref in band_dict
   low_r, high_r = band_dict[band_ref]
   band_ref_power = simps(psd[(freqs > low_r) & (freqs <= high_r)], dx=freq_res)
-  return band_power / (band_ref_power + 1e-6)
+  if band_ref_power < _PR_ZERO_EPS: return np.nan
+  return band_power / band_ref_power
 
 
 # For compatibility
@@ -123,12 +128,21 @@ class PowerProbes(ProbeGroup):
     feature_dict = OrderedDict()
     feature_dict['POWER-30'] = power_dict['total']
 
-    pr = lambda key1, key2: power_dict[key1] / (power_dict[key2] + 1e-6)
+    def pr(key1, key2):
+      num, den = power_dict[key1], power_dict[key2]
+      if den < _PR_ZERO_EPS: return np.nan
+      return num / den
+
     for pk in self.probe_keys[1:]:
       key1, key2 = pk.split('-')[1].split('_')
 
       value = pr(key1.lower(), key2.lower())
-      if self.log: value = np.log(value)
+      # log-guard: np.log(0) = -inf, np.log(nan) = nan; emit nan so
+      # cloud-building NaN filters (extractor.py, nebula.py) drop the
+      # epoch. Do NOT rely on Traj.skip_invalid — it drops the whole
+      # (channel, tr, probe_key) trajectory on any bad epoch.
+      if self.log:
+        value = np.log(value) if value > 0 else np.nan
       feature_dict[pk] = value
 
     # Check and return

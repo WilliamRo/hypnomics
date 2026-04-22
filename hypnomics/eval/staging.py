@@ -47,31 +47,35 @@ class SleepStagingEvaluator:
 
   # region: Core API
 
-  def evaluate(self, signal_groups, annotation_key='stage Ground-Truth'):
-    """Run evaluation on a list of SignalGroup objects.
+  def evaluate(self, psgs, annotation_key='stage Ground-Truth'):
+    """Run evaluation on a list of PSG objects.
 
     Args:
-      signal_groups: list of SignalGroup objects.
-      annotation_key: key to retrieve ground-truth annotations from sg.
+      psgs: list of PSG objects (from `hypnomics.protocol.psg`).
+      annotation_key: key to retrieve ground-truth annotations from each PSG.
     """
     self._results = []
     self._skipped = []
-    for sg in signal_groups:
-      if not self.model.check_channel(sg):
-        self._skipped.append(sg.label)
+    for psg in psgs:
+      if not self.model.check_channel(psg):
+        self._skipped.append(psg.label)
         continue
 
-      y_true = self._get_ground_truth(sg, annotation_key)
-      y_pred = self.model.predict(sg)
+      y_true = self._get_ground_truth(psg, annotation_key)
+      y_pred = np.asarray(self.model.predict(psg))
 
-      y_true, y_pred = np.array(y_true), np.array(y_pred)
       assert len(y_true) == len(y_pred), (
         f"Length mismatch: {len(y_true)} vs {len(y_pred)} "
-        f"for subject '{sg.label}'")
+        f"for subject '{psg.label}'")
+
+      # Drop out-of-range labels (e.g., Unknown=5) from both y_true and the
+      # aligned y_pred so the confusion matrix only counts scorable epochs.
+      valid = (y_true >= 0) & (y_true < NUM_STAGES)
+      y_true, y_pred = y_true[valid], y_pred[valid]
 
       cm = ConfusionMatrix(NUM_STAGES, class_names=STAGE_LABELS)
       cm.fill(y_pred, y_true)
-      self._results.append((sg.label, cm))
+      self._results.append((psg.label, cm))
 
     return self
 
@@ -121,12 +125,15 @@ class SleepStagingEvaluator:
   # region: Internal
 
   @staticmethod
-  def _get_ground_truth(sg, annotation_key):
-    """Extract ground-truth stage labels from a SignalGroup."""
-    assert annotation_key in sg.annotations, (
-      f"Annotation '{annotation_key}' not found in sg '{sg.label}'. "
-      f"Available: {list(sg.annotations.keys())}")
-    annotation = sg.annotations[annotation_key]
-    return np.array(annotation.annotations)
+  def _get_ground_truth(psg, annotation_key):
+    """Extract ground-truth stage labels from a PSG."""
+    assert annotation_key in psg.annotation_keys, (
+      f"Annotation '{annotation_key}' not found in psg '{psg.label}'. "
+      f"Available: {psg.annotation_keys}")
+    _intervals, labels, _names = psg.get_annotation(annotation_key)
+    assert labels is not None, (
+      f"Annotation '{annotation_key}' in psg '{psg.label}' is event-only "
+      f"(no stage labels).")
+    return np.asarray(labels)
 
   # endregion: Internal

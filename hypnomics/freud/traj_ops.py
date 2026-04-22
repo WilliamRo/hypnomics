@@ -24,8 +24,7 @@ Provides `generate_trajs`, a reusable helper mirroring the feature set of
     the total count, no processing).
   - `channel_should_exist=False` to tolerate missing channels.
   - `skip_invalid=True` to warn and drop NaN/Inf probe values.
-  - `gc.collect()` + best-effort `_BUFFER.clear()` (power_probes cache)
-    after each file for large batches.
+  - `gc.collect()` after each file for large batches.
   - Per-file ETA via `roma.console.print_progress`.
 """
 from hypnomics.protocol import PSG, Traj
@@ -222,9 +221,7 @@ def generate_trajs(traj_dir, probes,
         try: os.remove(traj_path)
         except OSError: pass
 
-    # Memory hygiene between files: clear the power_probes PSD cache
-    # if it's in use, then force a gc cycle.
-    _clear_probe_buffers()
+    # Memory hygiene between files
     gc.collect()
 
   total_elapsed = time.time() - batch_start
@@ -344,14 +341,5 @@ def _fmt_duration(seconds):
   m = rem // 60
   return f'{h}h{m:02d}m'
 
-
-def _clear_probe_buffers():
-  """Best-effort clearing of the `power_probes._BUFFER` cache between
-  files. Silently no-op if the module isn't imported."""
-  try:
-    from hypnomics.hypnoprints.probes.wavestats.power_probes import _BUFFER
-    _BUFFER.clear()
-  except Exception:
-    pass
 
 # endregion: Helpers

@@ -252,8 +252,6 @@ class Freud(FileManager):
       sg_path, pattern=pattern, progress_bar=True,
       sg_file_list=sg_file_list, **kwargs)
 
-    from hypnomics.hypnoprints.probes.wavestats.power_probes import _BUFFER
-
     for sg in sg_generator:
 
       if not sg_filter(_sg_label=sg.label):
@@ -264,9 +262,6 @@ class Freud(FileManager):
         extractor_dict=extractor_dict, overwrite=overwrite,
         SKIP_INVALID=SKIP_INVALID, CHANNEL_SHOULD_EXIST=CHANNEL_SHOULD_EXIST,
         PARA_CHANNEL=PARA_CHANNEL, traj=traj)
-
-      # Clear buffer
-      _BUFFER.clear()
 
       # TODO: not an elegant solution, need to find the root cause
       SignalGroup.cloud.clear()
