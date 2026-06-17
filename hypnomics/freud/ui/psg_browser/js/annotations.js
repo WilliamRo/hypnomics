@@ -13,11 +13,27 @@ const ANNO_KEY_MAP = {
 };
 const ANNO_LABEL_NAMES = ['Wake', 'N1', 'N2', 'N3', 'REM', 'Unknown'];
 
-// Stage mode: when active, keyboard shortcuts annotate epochs
+// Stage mode: when active, keyboard shortcuts annotate epochs.
+// `stageModeWanted` is the user's intent (toggled via the stage-mode button);
+// the effective `stageMode` = stageModeWanted AND annotation currently allowed.
+// So entering overlap/zoom merely suspends it (greyed), and returning to an
+// aligned 30s epoch resumes it without re-toggling.
 let stageMode = false;
+let stageModeWanted = false;
 
 function isStageEditable() {
   return activeAnnoKey && isLocalAnnotation(activeAnnoKey);
+}
+
+// The fast window is epoch-aligned (no 50% overlap offset).
+function isViewAligned() {
+  return viewStartSec === currentEpoch * 30;
+}
+
+// Annotation is allowed only on a full, aligned 30s epoch — never while the
+// window is zoomed in (<30s) or overlapped (offset by half an epoch).
+function isAnnotationAllowed() {
+  return isStageEditable() && fastWindowSec === 30 && isViewAligned();
 }
 
 function updateShowHypnoToggle() {
@@ -39,12 +55,25 @@ function updateStageModeBtn() {
   }
   btn.style.display = '';
   label.style.display = '';
-  check.checked = stageMode;
+  // Effective stage mode = intent AND annotation allowed. Overlap/zoom suspends
+  // (greys) it but keeps the intent, so returning to an aligned 30s epoch
+  // resumes it automatically. The checkbox shows the intent (stays ticked while
+  // greyed) for visual continuity.
+  const allowed = isAnnotationAllowed();
+  stageMode = stageModeWanted && allowed;
+  check.checked = stageModeWanted;
+  check.disabled = !allowed;
+  const dim = allowed ? '1' : '0.4';
+  btn.style.opacity = dim;
+  label.style.opacity = dim;
+  btn.title = allowed
+    ? 'Toggle stage annotation mode'
+    : 'Annotation only on an aligned 30s epoch (suspended in overlap / zoom-in)';
 }
 
 function toggleStageMode() {
-  if (!isStageEditable()) return;
-  stageMode = !stageMode;
+  if (!isAnnotationAllowed()) return;
+  stageModeWanted = !stageModeWanted;
   updateStageModeBtn();
 }
 
@@ -151,7 +180,7 @@ function getActiveLabels() {
 
 // Switch to a different annotation
 async function switchAnnotation(key) {
-  stageMode = false; // reset on any switch
+  stageMode = false; stageModeWanted = false; // reset on any switch
   if (key === '__new__') {
     const name = prompt('New annotation name:');
     if (!name || !name.trim()) {
@@ -238,6 +267,7 @@ async function switchAnnotation(key) {
 // Annotate the current epoch with a stage
 function annotateCurrentEpoch(stageNameStr) {
   if (!annotations || !activeAnnoKey) return;
+  if (!isAnnotationAllowed()) return;   // only on an aligned 30s epoch
   if (!isLocalAnnotation(activeAnnoKey)) {
     alert('Cannot modify "' + activeAnnoKey.replace('stage ', '') + '" (read-only from h5 file).\nCreate a new annotation to edit.');
     return;
@@ -246,7 +276,7 @@ function annotateCurrentEpoch(stageNameStr) {
   const labelIdx = ANNO_LABEL_NAMES.indexOf(stageNameStr);
   if (labelIdx < 0) return;
 
-  // Find the epoch index for current epoch
+  // Label the aligned epoch shown in the panel.
   const t = currentEpoch * 30;
   for (let i = 0; i < annotations.labels.length; i++) {
     const t0 = annotations.intervals[i * 2];
@@ -265,11 +295,30 @@ function annotateCurrentEpoch(stageNameStr) {
     modified: true,
   });
 
-  // Auto-advance to next epoch
-  navigate(1);
+  // Auto-advance to the next whole (aligned) epoch that is still unannotated.
+  const next = nextUnannotatedEpoch(currentEpoch);
+  if (next !== null) {
+    snapViewStart(next * 30);
+    saveCurrentFileState();
+  } else {
+    showToast('All epochs scored.');
+  }
   drawHypnogram();
   drawWaveforms();
   updateEpochInfo();
+}
+
+// First epoch after `fromEpoch` (within the Mark In/Out range) whose label is
+// Unknown, or null if none. Label index == epoch index for local annotations.
+function nextUnannotatedEpoch(fromEpoch) {
+  if (!annotations || !annotations.labels) return null;
+  const unknownIdx = (annotations.labelNames || ANNO_LABEL_NAMES).indexOf('Unknown');
+  if (unknownIdx < 0) return null;
+  const hi = Math.min(visibleEnd(), annotations.labels.length - 1);
+  for (let e = fromEpoch + 1; e <= hi; e++) {
+    if (annotations.labels[e] === unknownIdx) return e;
+  }
+  return null;
 }
 
 // Save annotation to IDB

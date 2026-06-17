@@ -28,8 +28,10 @@ function scheduleEpochRender() {
 }
 
 function snapViewStart(t) {
-  // Snap to nearest multiple of fastWindowSec
-  const snapped = Math.floor(t / fastWindowSec) * fastWindowSec;
+  // Snap to the half-window grid so consecutive views can overlap by 50%.
+  // Epoch boundaries (multiples of 30) always fall on this grid.
+  const step = fastWindowSec / 2;
+  const snapped = Math.round(t / step) * step;
   const minT = visibleStart() * 30;
   const maxT = (visibleEnd() + 1) * 30 - fastWindowSec;
   viewStartSec = Math.max(minT, Math.min(maxT, snapped));
@@ -37,7 +39,14 @@ function snapViewStart(t) {
 }
 
 function navigate(delta) {
-  snapViewStart(viewStartSec + delta * fastWindowSec);
+  // One step = half the window (50% overlap). Used by ←/→ and the wheel.
+  snapViewStart(viewStartSec + delta * (fastWindowSec / 2));
+  scheduleEpochRender();
+  saveCurrentFileState();
+}
+
+function navigateBy(seconds) {
+  snapViewStart(viewStartSec + seconds);
   scheduleEpochRender();
   saveCurrentFileState();
 }
@@ -48,25 +57,37 @@ function navigateToTime(seconds) {
 }
 
 function updateEpochInfo() {
-  const t = currentEpoch * 30;
+  // Show the stage of every epoch the fast window spans. Aligned 30s view ->
+  // one stage (e.g. "N1"); 50%-overlap view -> two ("N1 | N2").
   let stageStr = '';
   if (annotations) {
-    const labels = annotations.labels;
-    const intervals = annotations.intervals;
-    for (let i = 0; i < labels.length; i++) {
-      const t0 = intervals[i * 2];
-      const t1 = intervals[i * 2 + 1];
-      if (t >= t0 && t < t1) {
-        const sName = stageName(labels[i]);
-        const sColor = stageColor(labels[i]) || '';
-        stageStr = ` | <span style="color:${sColor};font-weight:600">${sName}</span>`;
-        break;
-      }
+    const e0 = Math.floor(viewStartSec / 30);
+    const e1 = Math.floor((viewStartSec + fastWindowSec - 0.001) / 30);
+    const parts = [];
+    for (let e = e0; e <= e1; e++) {
+      const s = stageAtTime(e * 30 + 15);
+      if (s) parts.push(`<span style="color:${s.color};font-weight:600">${s.name}</span>`);
+    }
+    if (parts.length) {
+      stageStr = ' | ' + parts.join(' <span style="color:var(--text-dim)">|</span> ');
     }
   }
   epochInfo.innerHTML = `Epoch <span>${currentEpoch + 1}</span> / ${totalEpochs} | ${formatTime(viewStartSec)} [${fastWindowSec}s]${stageStr}`;
   if (hypnoTime) hypnoTime.textContent = formatTime(viewStartSec) + ' - ' + formatTime(viewStartSec + fastWindowSec);
   try { updateEventNav(); } catch(_) {}
+  try { updateStageModeBtn(); } catch(_) {}
+}
+
+// Stage {name,color} at an absolute time, or null.
+function stageAtTime(t) {
+  if (!annotations) return null;
+  const labels = annotations.labels, iv = annotations.intervals;
+  for (let i = 0; i < labels.length; i++) {
+    if (t >= iv[i * 2] && t < iv[i * 2 + 1]) {
+      return { name: stageName(labels[i]), color: stageColor(labels[i]) || '' };
+    }
+  }
+  return null;
 }
 
 // --- Apply theme on load ---
@@ -475,8 +496,8 @@ document.onkeydown = (e) => {
 
   if (e.key === 'ArrowLeft') navigate(-1);
   if (e.key === 'ArrowRight') navigate(1);
-  if (e.key === 'ArrowUp') navigate(-10);
-  if (e.key === 'ArrowDown') navigate(10);
+  if (e.key === 'ArrowUp') navigateBy(-10 * 30);
+  if (e.key === 'ArrowDown') navigateBy(10 * 30);
   if (e.key === '?') toggleHelpPanel();
   if (e.key === 'S') toggleAnalysisPlugin('spectrum');
 };

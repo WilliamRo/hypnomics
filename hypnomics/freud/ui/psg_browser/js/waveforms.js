@@ -122,6 +122,25 @@ function hexToRgba(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
+// Dashed grey vertical markers at interior epoch boundaries (multiples of 30s)
+// — visible e.g. in the 50%-overlap fast view where a boundary sits mid-panel.
+function drawEpochBoundaries(ctx, w, h, viewStart, windowSec) {
+  ctx.save();
+  ctx.strokeStyle = darkMode ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.28)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 4]);
+  const first = Math.ceil((viewStart + 0.001) / 30) * 30;
+  for (let b = first; b < viewStart + windowSec - 0.001; b += 30) {
+    const x = ((b - viewStart) / windowSec) * w;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
 function drawWaveforms() {
   if (!psgFile || activeChannels.length === 0) {
     // Clear both canvases
@@ -187,6 +206,9 @@ function drawWaveforms() {
 
     // Event-annotation highlights (behind traces), fast window only.
     drawEventHighlights(ctx, w, h, epochStart, fastWindowSec);
+
+    // Dashed epoch-boundary markers (visible in the 50%-overlap view).
+    drawEpochBoundaries(ctx, w, h, epochStart, fastWindowSec);
 
     const fastData = fastChs.map(n => readChannelData(n, epochStart, fastWindowSec)).filter(Boolean);
     const labelData = drawTraces(ctx, w, fastData, chHeight);
@@ -261,31 +283,26 @@ function drawWaveforms() {
       ctx.drawImage(_slowOffscreen, 0, 0);
     }
 
-    // Cursor: 30s epoch bracket
+    // Cursor — two parts:
+    //  (a) faint tint on the current (left-edge) epoch: which 30s cell the fast
+    //      view's left edge belongs to.
+    //  (b) the actual fast view window [viewStart, +fastWindowSec], drawn ALWAYS
+    //      with a solid bracket. Under 50% overlap (b) sits offset half a cell
+    //      from (a) and the epoch splitters — that offset is the overlap cue.
     const epoch30Start = currentEpoch * 30;
-    const outerX0 = ((epoch30Start - slowStart) / slowWindowSec) * w;
-    const outerX1 = ((epoch30Start + 30 - slowStart) / slowWindowSec) * w;
-
+    const epX0 = ((epoch30Start - slowStart) / slowWindowSec) * w;
+    const epX1 = ((epoch30Start + 30 - slowStart) / slowWindowSec) * w;
     ctx.fillStyle = darkMode ? 'rgba(251,146,60,0.08)' : 'rgba(251,146,60,0.1)';
-    ctx.fillRect(outerX0, 0, outerX1 - outerX0, h);
-    ctx.strokeStyle = 'rgba(251,146,60,0.5)';
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 3]);
-    ctx.beginPath(); ctx.moveTo(outerX0, 0); ctx.lineTo(outerX0, h); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(outerX1, 0); ctx.lineTo(outerX1, h); ctx.stroke();
-    ctx.setLineDash([]);
+    ctx.fillRect(epX0, 0, epX1 - epX0, h);
 
-    // Nested fast window (only when zoomed in)
-    if (fastWindowSec < 30) {
-      const innerX0 = ((epochStart - slowStart) / slowWindowSec) * w;
-      const innerX1 = ((epochStart + fastWindowSec - slowStart) / slowWindowSec) * w;
-      ctx.fillStyle = darkMode ? 'rgba(251,146,60,0.12)' : 'rgba(251,146,60,0.15)';
-      ctx.fillRect(innerX0, 0, innerX1 - innerX0, h);
-      ctx.strokeStyle = 'rgba(251,146,60,0.7)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(innerX0, 0); ctx.lineTo(innerX0, h); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(innerX1, 0); ctx.lineTo(innerX1, h); ctx.stroke();
-    }
+    const fwX0 = ((epochStart - slowStart) / slowWindowSec) * w;
+    const fwX1 = ((epochStart + fastWindowSec - slowStart) / slowWindowSec) * w;
+    ctx.fillStyle = darkMode ? 'rgba(251,146,60,0.12)' : 'rgba(251,146,60,0.15)';
+    ctx.fillRect(fwX0, 0, fwX1 - fwX0, h);
+    ctx.strokeStyle = 'rgba(251,146,60,0.7)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(fwX0, 0); ctx.lineTo(fwX0, h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(fwX1, 0); ctx.lineTo(fwX1, h); ctx.stroke();
 
     // Epoch splitters + stage labels across the slow view
     if (annotations) {
