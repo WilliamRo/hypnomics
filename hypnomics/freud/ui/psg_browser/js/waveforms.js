@@ -90,6 +90,38 @@ function drawTraces(ctx, w, chDataList, chHeight) {
   return labelData;
 }
 
+// Paint background highlights for every checked event annotation. Fast window
+// only (v1). Zero-duration events (e.g. spikes) render as a minimum-width
+// vertical tick so they stay visible at any window width. See event_df.md.
+const EVENT_MIN_PX = 2;
+function drawEventHighlights(ctx, w, h, viewStart, windowSec) {
+  if (!activeEventKeys || activeEventKeys.size === 0) return;
+  const viewEnd = viewStart + windowSec;
+  for (const key of activeEventKeys) {
+    const iv = getEventIntervals(key);
+    if (!iv) continue;
+    ctx.fillStyle = hexToRgba(eventColors[key] || '#888888', 0.22);
+    const n = iv.length >> 1;
+    for (let i = 0; i < n; i++) {
+      const t0 = iv[i * 2], t1 = iv[i * 2 + 1];
+      if (t1 < viewStart || t0 > viewEnd) continue;   // outside the window
+      let x0 = ((t0 - viewStart) / windowSec) * w;
+      const x1 = ((t1 - viewStart) / windowSec) * w;
+      let bw = x1 - x0;
+      if (bw < EVENT_MIN_PX) { x0 = (x0 + x1) / 2 - EVENT_MIN_PX / 2; bw = EVENT_MIN_PX; }
+      ctx.fillRect(x0, 0, bw, h);
+    }
+  }
+}
+
+// '#rrggbb' + alpha -> 'rgba(r,g,b,a)'.
+function hexToRgba(hex, a) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex || '');
+  if (!m) return `rgba(136,136,136,${a})`;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
 function drawWaveforms() {
   if (!psgFile || activeChannels.length === 0) {
     // Clear both canvases
@@ -152,6 +184,9 @@ function drawWaveforms() {
 
     const chHeight = h / fastChs.length;
     drawGrid(ctx, w, h, fastChs.length, chHeight, fastWindowSec, gridBase);
+
+    // Event-annotation highlights (behind traces), fast window only.
+    drawEventHighlights(ctx, w, h, epochStart, fastWindowSec);
 
     const fastData = fastChs.map(n => readChannelData(n, epochStart, fastWindowSec)).filter(Boolean);
     const labelData = drawTraces(ctx, w, fastData, chHeight);

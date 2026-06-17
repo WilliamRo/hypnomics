@@ -66,6 +66,7 @@ function updateEpochInfo() {
   }
   epochInfo.innerHTML = `Epoch <span>${currentEpoch + 1}</span> / ${totalEpochs} | ${formatTime(viewStartSec)} [${fastWindowSec}s]${stageStr}`;
   if (hypnoTime) hypnoTime.textContent = formatTime(viewStartSec) + ' - ' + formatTime(viewStartSec + fastWindowSec);
+  try { updateEventNav(); } catch(_) {}
 }
 
 // --- Apply theme on load ---
@@ -424,6 +425,13 @@ nextBtn.onclick = () => navigate(1);
 
 // --- Keyboard handler ---
 document.onkeydown = (e) => {
+  // Event color modal is fully modal: swallow every key; Escape closes it.
+  if (typeof eventColorModalOpen !== 'undefined' && eventColorModalOpen) {
+    e.preventDefault();
+    if (e.key === 'Escape') closeEventColorModal();
+    return;
+  }
+
   // Command palette
   if (e.key === ':' && !cmdBarOpen && document.activeElement === document.body) {
     e.preventDefault(); openCmdBar(); return;

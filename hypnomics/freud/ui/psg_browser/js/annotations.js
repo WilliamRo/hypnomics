@@ -353,3 +353,57 @@ async function exportAnnotation(annoKey) {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+// =============================================================================
+// Event annotations (interval-only markers) — read + color helpers
+// =============================================================================
+
+// An annotation is an "event" when its group has `intervals` but no `labels`
+// dataset (is_event=True in the PSG protocol). Stage annotations have labels.
+function isEventAnnotation(key) {
+  try {
+    const grp = psgFile.get(`annotations/${key}`);
+    if (!grp || typeof grp.keys !== 'function') return false;
+    const ks = grp.keys();
+    return ks.includes('intervals') && !ks.includes('labels');
+  } catch(e) { return false; }
+}
+
+// Next palette color not already in use (falls back to cycling the palette).
+function nextEventColor() {
+  const used = new Set(Object.values(eventColors));
+  for (const c of EVENT_COLOR_PALETTE) if (!used.has(c)) return c;
+  return EVENT_COLOR_PALETTE[
+    Object.keys(eventColors).length % EVENT_COLOR_PALETTE.length];
+}
+
+// Lazily read + cache one event's intervals (flat Float64Array [t0,t1,...]).
+function getEventIntervals(key) {
+  if (eventIntervalsCache[key]) return eventIntervalsCache[key];
+  try {
+    const iv = psgFile.get(`annotations/${key}/intervals`).value;
+    eventIntervalsCache[key] = iv;
+    return iv;
+  } catch(e) {
+    console.warn('Failed to read event intervals:', key, e);
+    return null;
+  }
+}
+
+// Nearest epoch (in the given direction) whose start falls within an interval
+// of this event, restricted to the visible Mark In/Out range. dir = +1 next,
+// -1 prev. Returns the target epoch index, or null if none in that direction.
+function eventNavEpoch(key, dir) {
+  const iv = getEventIntervals(key);
+  if (!iv) return null;
+  const lo = visibleStart(), hi = visibleEnd();
+  const n = iv.length >> 1;
+  let best = null;
+  for (let i = 0; i < n; i++) {
+    const e = Math.floor(iv[i * 2] / 30);
+    if (e < lo || e > hi) continue;
+    if (dir > 0) { if (e > currentEpoch && (best === null || e < best)) best = e; }
+    else { if (e < currentEpoch && (best === null || e > best)) best = e; }
+  }
+  return best;
+}

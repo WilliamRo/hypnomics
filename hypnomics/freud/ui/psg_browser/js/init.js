@@ -97,15 +97,21 @@ async function loadFile(arrayBuffer, opts = {}) {
     duration = mainCh.length / mainCh.sfreq;
     totalEpochs = Math.floor(duration / 30);
 
-    // (4.4) Read annotations — collect all stage keys
+    // (4.4) Read annotations — stage keys feed the hypnogram; event keys
+    // (interval-only, no `labels`) feed the toggleable event highlights.
     annotations = null;
     annoKeys = [];
+    eventKeys = [];
+    activeEventKeys = new Set();
+    eventColors = {};
+    for (const k in eventIntervalsCache) delete eventIntervalsCache[k];
     try {
       const annoGroup = psgFile.get('annotations');
       if (annoGroup) {
         const keys = annoGroup.keys();
         for (const key of keys) {
           if (key.startsWith('stage')) annoKeys.push(key);
+          else if (isEventAnnotation(key)) eventKeys.push(key);
         }
       }
     } catch(e) { console.warn('No annotations found:', e); }
@@ -185,6 +191,19 @@ async function loadFile(arrayBuffer, opts = {}) {
     undoStack.length = 0;
     redoStack.length = 0;
 
+    // (4.9.5) Restore event-annotation selections + colors for this file so a
+    // recent-file reopen shows the same highlights (drawn just below).
+    try {
+      const efs = lastFileName ? getFileSettings(lastFileName) : {};
+      if (Array.isArray(efs.activeEventKeys)) {
+        activeEventKeys = new Set(efs.activeEventKeys.filter(k => eventKeys.includes(k)));
+      }
+      if (efs.eventColors && typeof efs.eventColors === 'object') {
+        eventColors = { ...efs.eventColors };
+      }
+      for (const k of activeEventKeys) if (!eventColors[k]) eventColors[k] = nextEventColor();
+    } catch(_) {}
+
     resizeCanvases();
     drawHypnogram();
     drawWaveforms();
@@ -203,6 +222,11 @@ async function loadFile(arrayBuffer, opts = {}) {
       const _fs = lastFileName ? getFileSettings(lastFileName) : {};
       if (Array.isArray(_fs.expandedH5Paths)) {
         expandedH5Paths = new Set(_fs.expandedH5Paths);
+      }
+      // Seed annotations/ open when the file has event annotations so their
+      // toggles are visible the first time the H5 tree panel is opened.
+      if (typeof eventKeys !== 'undefined' && eventKeys.length > 0) {
+        expandedH5Paths.add('psg:annotations');
       }
     } catch(_) {}
 

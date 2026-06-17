@@ -300,6 +300,7 @@ async function cmdShowH5() {
   const body = document.getElementById('sidePanelBody');
   document.getElementById('sidePanelTitle').textContent = 'H5 Structure \u2014 ' + (lastFileName || 'unknown');
   body.innerHTML = '';
+  _eventNavControls = [];
   body.appendChild(buildH5Tree(psgFile, '/'));
 
   // Append traj/ group from the companion .traj.h5 (if loaded), with a
@@ -459,6 +460,191 @@ async function cmdShowH5() {
 
   panel.classList.add('active');
   if (fontDelta !== 0) applyFontDelta();
+  try { updateEventNav(); } catch(_) {}
+}
+
+// Event-row controls registry (prev/next buttons), so their enabled state can
+// be refreshed live as the current epoch changes. Reset on each tree rebuild.
+let _eventNavControls = [];
+// Modal color-picker state (a top-center popup with a click-outside mask).
+let eventColorModalOpen = false;
+let _eventColorModalEls = null;
+
+// Decorate an event-annotation group header (rendered in-place under
+// annotations/). Layout: [checkbox] event xxx/  [◀][▶][swatch]. The nav arrows
+// jump to the prev/next epoch containing this event (disabled when none in that
+// direction); the swatch opens a modal color picker. Controls show only when
+// the event is checked. Toggling/recoloring persists + repaints the fast panel.
+function decorateEventGroupHeader(groupEl, key) {
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.checked = activeEventKeys.has(key);
+  cb.style.cssText = 'vertical-align:middle;margin:0 5px 0 0;width:11px;height:11px;cursor:pointer';
+  cb.onclick = (e) => e.stopPropagation();
+
+  // Controls group (arrows + swatch), shown only when checked.
+  const ctrl = document.createElement('span');
+  ctrl.style.cssText = 'display:none;margin-left:8px;align-items:center;gap:4px;vertical-align:middle';
+
+  const prevBtn = navButton('◀', 'Jump to previous epoch with this event');
+  const nextBtn = navButton('▶', 'Jump to next epoch with this event');
+  prevBtn.onclick = (e) => {
+    e.stopPropagation();
+    const t = eventNavEpoch(key, -1);
+    if (t === null) return;
+    navigateToTime(t * 30); saveCurrentFileState();
+  };
+  nextBtn.onclick = (e) => {
+    e.stopPropagation();
+    const t = eventNavEpoch(key, +1);
+    if (t === null) return;
+    navigateToTime(t * 30); saveCurrentFileState();
+  };
+
+  const sw = document.createElement('span');
+  sw.title = 'Click to choose highlight color';
+  sw.style.cssText =
+    'width:12px;height:12px;border-radius:2px;cursor:pointer;' +
+    'border:1px solid rgba(128,128,128,0.6);vertical-align:middle';
+  sw.onclick = (e) => { e.stopPropagation(); openEventColorModal(key, sw); };
+
+  ctrl.appendChild(prevBtn);
+  ctrl.appendChild(nextBtn);
+  ctrl.appendChild(sw);
+
+  const syncControls = () => {
+    if (cb.checked) {
+      ctrl.style.display = 'inline-flex';
+      sw.style.background = eventColors[key] || '#888888';
+    } else {
+      ctrl.style.display = 'none';
+    }
+  };
+
+  cb.onchange = () => {
+    if (cb.checked) {
+      activeEventKeys.add(key);
+      if (!eventColors[key]) eventColors[key] = nextEventColor();
+    } else {
+      activeEventKeys.delete(key);
+    }
+    syncControls();
+    try { saveEventUIState(); } catch(_) {}
+    try { drawWaveforms(); } catch(_) {}
+    try { updateEventNav(); } catch(_) {}
+  };
+
+  groupEl.insertBefore(cb, groupEl.firstChild);
+  groupEl.appendChild(ctrl);
+  _eventNavControls.push({ key, prevBtn, nextBtn });
+  syncControls();
+}
+
+function navButton(glyph, title) {
+  const b = document.createElement('button');
+  b.textContent = glyph;
+  b.title = title;
+  b.style.cssText =
+    'font-family:inherit;font-size:10px;line-height:1;padding:1px 4px;' +
+    'background:var(--bg-surface);color:var(--text);border:1px solid var(--border);' +
+    'border-radius:3px;cursor:pointer;vertical-align:middle';
+  b.onmousedown = (e) => e.stopPropagation();
+  return b;
+}
+
+function setNavBtnEnabled(btn, on) {
+  btn.disabled = !on;
+  btn.style.opacity = on ? '1' : '0.3';
+  btn.style.cursor = on ? 'pointer' : 'default';
+}
+
+// Refresh prev/next enabled state for every event row against the current
+// epoch. Stale (detached) controls from a prior rebuild are pruned.
+function updateEventNav() {
+  _eventNavControls = _eventNavControls.filter(c => document.contains(c.prevBtn));
+  for (const c of _eventNavControls) {
+    setNavBtnEnabled(c.prevBtn, eventNavEpoch(c.key, -1) !== null);
+    setNavBtnEnabled(c.nextBtn, eventNavEpoch(c.key, +1) !== null);
+  }
+}
+
+// Modal color picker: a top-center popup over a full-screen mask. Clicking the
+// mask (or Escape) closes it; while open it blocks all other interaction
+// (mouse via the mask, keys via the document.onkeydown guard).
+function openEventColorModal(key, swatchEl) {
+  if (eventColorModalOpen) return;
+  eventColorModalOpen = true;
+
+  const mask = document.createElement('div');
+  mask.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,0.45)';
+  mask.onclick = (e) => { e.stopPropagation(); closeEventColorModal(); };
+  mask.addEventListener('wheel', (e) => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
+
+  const panel = document.createElement('div');
+  panel.style.cssText =
+    'position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:10001;' +
+    'background:var(--bg-panel);border:1px solid var(--accent);border-radius:6px;' +
+    "padding:14px 16px;box-shadow:0 10px 30px rgba(0,0,0,0.5);min-width:200px;" +
+    "font-family:'JetBrains Mono',monospace";
+  panel.onclick = (e) => e.stopPropagation();
+
+  const title = document.createElement('div');
+  title.textContent = 'Highlight color — ' + key.replace(/^event /, '');
+  title.style.cssText = 'color:var(--text);font-size:12px;margin-bottom:10px';
+  panel.appendChild(title);
+
+  const apply = (c, andClose) => {
+    eventColors[key] = c;
+    if (swatchEl) swatchEl.style.background = c;
+    try { saveEventUIState(); } catch(_) {}
+    try { drawWaveforms(); } catch(_) {}
+    if (andClose) closeEventColorModal();
+  };
+
+  const grid = document.createElement('div');
+  grid.style.cssText = 'display:grid;grid-template-columns:repeat(5,22px);gap:8px;margin-bottom:12px';
+  for (const c of EVENT_COLOR_PALETTE) {
+    const b = document.createElement('div');
+    b.title = c;
+    const sel = (eventColors[key] || '').toLowerCase() === c.toLowerCase();
+    b.style.cssText =
+      'width:22px;height:22px;border-radius:3px;cursor:pointer;background:' + c +
+      ';border:2px solid ' + (sel ? 'var(--text)' : 'transparent');
+    b.onclick = (e) => { e.stopPropagation(); apply(c, true); };
+    grid.appendChild(b);
+  }
+  panel.appendChild(grid);
+
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:8px';
+  const lbl = document.createElement('span');
+  lbl.textContent = 'Custom';
+  lbl.style.cssText = 'color:var(--text-dim);font-size:11px';
+  const inp = document.createElement('input');
+  inp.type = 'color';
+  inp.value = toHex6(eventColors[key] || '#888888');
+  inp.style.cssText = 'width:40px;height:26px;padding:0;border:1px solid var(--border);background:none;cursor:pointer';
+  inp.oninput = () => apply(inp.value, false);
+  row.appendChild(lbl);
+  row.appendChild(inp);
+  panel.appendChild(row);
+
+  document.body.appendChild(mask);
+  document.body.appendChild(panel);
+  _eventColorModalEls = { mask, panel };
+}
+
+function closeEventColorModal() {
+  if (!eventColorModalOpen) return;
+  eventColorModalOpen = false;
+  try { _eventColorModalEls.mask.remove(); } catch(_) {}
+  try { _eventColorModalEls.panel.remove(); } catch(_) {}
+  _eventColorModalEls = null;
+}
+
+// Normalize an arbitrary color string to a 7-char '#rrggbb' for <input type=color>.
+function toHex6(c) {
+  return (typeof c === 'string' && /^#[0-9a-fA-F]{6}$/.test(c)) ? c : '#888888';
 }
 
 function buildH5Tree(file, path) {
@@ -507,6 +693,13 @@ function buildH5Tree(file, path) {
       const groupEl = document.createElement('div');
       groupEl.className = isExpanded ? 'h5-group open' : 'h5-group';
       groupEl.textContent = key + '/';
+
+      // Event annotations (in-place under annotations/) get a leading checkbox
+      // to toggle their highlight + a trailing color swatch (shown when checked).
+      if (path === 'annotations' && typeof eventKeys !== 'undefined'
+          && eventKeys.includes(key)) {
+        decorateEventGroupHeader(groupEl, key);
+      }
 
       const childrenEl = document.createElement('div');
       childrenEl.className = 'h5-node';

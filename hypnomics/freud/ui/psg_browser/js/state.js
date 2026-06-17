@@ -261,6 +261,34 @@ function saveTrajUIState() {
   } catch(_) {}
 }
 
+// (0.2) Event annotations (interval-only markers: spikes, arousals, apneas).
+// Discovered at load from `annotations/` keys that carry no `labels` dataset.
+// These are kept OUT of `annoKeys` (which drives the hypnogram); they are
+// toggled + colored independently and painted as fast-panel background
+// highlights. See freud/ui/event_df.md for the design.
+let eventKeys = [];                 // all event annotation keys in the file
+let activeEventKeys = new Set();    // checked events (currently highlighted)
+let eventColors = {};               // { key: '#rrggbb' }
+const eventIntervalsCache = {};     // { key: Float64Array [N*2] }, per file
+
+// Distinct, high-contrast palette assigned in order as events are checked.
+const EVENT_COLOR_PALETTE = [
+  '#ef4444', '#3b82f6', '#22c55e', '#a855f7', '#f59e0b',
+  '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#14b8a6',
+];
+
+// Persist event selections + colors to the current PSG's per-file settings,
+// mirroring saveTrajUIState so a recent-file reopen restores them.
+function saveEventUIState() {
+  if (!lastFileName) return;
+  try {
+    saveFileSettings(lastFileName, {
+      activeEventKeys: Array.from(activeEventKeys),
+      eventColors: { ...eventColors },
+    });
+  } catch(_) {}
+}
+
 // Transient toast notification. Fades in, holds for `ms`, then fades out.
 // Non-blocking; multiple calls stack vertically.
 function showToast(msg, ms = 2200) {
